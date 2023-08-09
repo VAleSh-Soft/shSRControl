@@ -1,8 +1,4 @@
-#if defined(ARDUINO_ARCH_ESP8266)
-#include <ESP8266WiFi.h>
-#elif defined(ARDUINO_ARCH_ESP32)
 #include <WiFi.h>
-#endif
 #include <WiFiUdp.h>
 #include <shButton.h>
 #include <shSRControl.h>
@@ -16,11 +12,11 @@ const uint16_t localPort = 54321; // локальный порт для прос
 
 WiFiUDP udp;
 
-const int8_t ledPin = LED_BUILTIN;
+const int8_t ledPin = 4;
 
 // работаем с двумя кнопками на модуле выключателя
-shButton btn1(D1);
-shButton btn2(D2);
+shButton btn1(16);
+shButton btn2(18);
 
 const uint8_t relays_count = 2;
 
@@ -67,8 +63,7 @@ void setup()
   Serial.println(F("Starting UDP"));
   if (udp.begin(localPort))
   {
-    Serial.print(F("OK, local port: "));
-    Serial.println(udp.localPort());
+    Serial.println(F("OK"));
     // установить интервал проверки доступности реле - 60 сек
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей

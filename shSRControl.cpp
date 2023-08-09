@@ -262,8 +262,10 @@ void shSwitchControl::receiveUdpPacket(int _size)
   udp->flush();
 
   String _resp = String(_str);
+#if defined(ARDUINO_ARCH_ESP8266)
   if ((udp->destinationIP() != broadcastAddress))
   {
+#endif
     int8_t relay_index = getRelayIndexByName(_resp);
     if (relay_index >= 0)
     {
@@ -285,12 +287,14 @@ void shSwitchControl::receiveUdpPacket(int _size)
         println(s);
       }
     }
+#if defined(ARDUINO_ARCH_ESP8266)
   }
   else
   {
     print(F("Skip broadcast packet "));
     println(udp->remoteIP().toString());
   }
+#endif
 }
 
 int8_t shSwitchControl::getRelayIndexByName(String &_res)
@@ -386,7 +390,12 @@ bool getValueOfArgument(String &_res, String _arg, String &_str)
 bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize)
 {
   udp->beginPacket(address, localPort);
-  udp->write(buf, bufSize);
+
+  uint8_t *_buf= new uint8_t[bufSize];
+  memcpy(_buf, buf, bufSize);
+  udp->write(_buf, bufSize);
+  delete[] _buf;
+  
   bool result = udp->endPacket() == 1;
   if (!result)
   {
