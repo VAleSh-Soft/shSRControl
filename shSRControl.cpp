@@ -213,6 +213,8 @@ void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_
   relayCount = _relay_count;
   relayArray = _relay_array;
   broadcastAddress = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
+  // выполнить первичный поиск привязанных реле
+  findRelays();
 }
 
 void shSwitchControl::tick()

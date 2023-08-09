@@ -73,8 +73,6 @@ void setup()
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
     switch_control.begin(&udp, localPort, relays_count, relays);
-    // выполнить первичный поиск привязанных реле
-    switch_control.findRelays();
   }
   else
   {
