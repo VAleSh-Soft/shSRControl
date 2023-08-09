@@ -28,7 +28,7 @@ struct shRelayData
   String relayName; 
   uint8_t relayPin;
   uint8_t shRelayControlLevel;
-  shButton *; 
+  shButton *relayButton; 
 };
 ```
 Здесь:
@@ -44,7 +44,7 @@ struct shSwitchData
   String relayName;
   bool relayFound;
   IPAddress relayAddress;
-  shButton *relayButton;  // 
+  shButton *relayButton; 
 };
 ```
 Здесь:
