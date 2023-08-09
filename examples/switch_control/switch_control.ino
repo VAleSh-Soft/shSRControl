@@ -24,19 +24,19 @@ shButton btn2(D2);
 
 const uint8_t relays_count = 2;
 
-SwitchData relays[relays_count] = {
-    (SwitchData){
+shSwitchData relays[relays_count] = {
+    (shSwitchData){
         "relay1",
         false,
         IPAddress(192, 168, 4, 1),
         &btn1},
-    (SwitchData){
+    (shSwitchData){
         "relay2",
         false,
         IPAddress(192, 168, 4, 1),
         &btn2}};
 
-SwitchControl switch_control;
+shSwitchControl switch_control;
 
 void setup()
 {

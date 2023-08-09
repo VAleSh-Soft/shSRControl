@@ -23,19 +23,19 @@ shButton btn1(D1);
 // работаем с двумя реле на модуле реле (локальная кнопка только для первого реле)
 const uint8_t relays_count = 2;
 
-RelayData relays[relays_count] = {
-    (RelayData){
+shRelayData relays[relays_count] = {
+    (shRelayData){
         "relay1",
         LED_BUILTIN,
         LOW,
         &btn1},
-    (RelayData){
+    (shRelayData){
         "relay2",
         LED_BUILTIN,
         LOW,
         NULL}};
 
-RelayControl relay_control;
+shRelayControl relay_control;
 
 void setup()
 {

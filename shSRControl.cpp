@@ -30,16 +30,23 @@ static const String sr_any_str = "any_relay";
 
 static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
+bool logOn = true;
 
 static bool getValueOfArgument(String &_res, String _arg, String &_str);
 static bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize);
 static String getArgument(String _res, String _arg);
+static void print(String _str);
+static void println(String _str);
 
-// ==== RelayControl class ===========================
+// ==== shRelayControl class ===========================
 
-RelayControl::RelayControl() {}
+shRelayControl::shRelayControl() {}
 
-void RelayControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, RelayData *_relay_array)
+void shRelayControl::setLogOnState(bool _on) { logOn = _on; }
+
+bool shRelayControl::getLogOnState() { return (logOn); }
+
+void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shRelayData *_relay_array)
 {
   udp = _udp;
   localPort = _local_port;
@@ -47,12 +54,12 @@ void RelayControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_cou
   relayArray = _relay_array;
   for (uint8_t i = 0; i < relayCount; i++)
   {
-    digitalWrite(relayArray[i].relayPin, !relayArray[i].relayControlLevel);
+    digitalWrite(relayArray[i].relayPin, !relayArray[i].shRelayControlLevel);
     pinMode(relayArray[i].relayPin, OUTPUT);
   }
 }
 
-void RelayControl::tick()
+void shRelayControl::tick()
 {
   for (uint8_t i = 0; i < relayCount; i++)
   {
@@ -68,7 +75,7 @@ void RelayControl::tick()
     receiveUdpPacket(packet_size);
 }
 
-String RelayControl::getJsonStringToSend(String _name, String _comm, String _for)
+String shRelayControl::getJsonStringToSend(String _name, String _comm, String _for)
 {
   StaticJsonDocument<256> doc;
 
@@ -82,7 +89,19 @@ String RelayControl::getJsonStringToSend(String _name, String _comm, String _for
   return (_res);
 }
 
-void RelayControl::receiveUdpPacket(int _size)
+void shRelayControl::respondToRelayCheck(int8_t index)
+{
+  if ((index >= 0) && (index <= relayCount))
+  {
+    String s = getJsonStringToSend(relayArray[index].relayName, sr_ok_str, sr_respond_str);
+    print(relayArray[index].relayName);
+    print(F(": request received, response - "));
+    println(sr_ok_str);
+    sendUdpPacket(udp->remoteIP(), s.c_str(), s.length());
+  }
+}
+
+void shRelayControl::receiveUdpPacket(int _size)
 {
   char _str[_size];
 
@@ -90,16 +109,19 @@ void RelayControl::receiveUdpPacket(int _size)
   udp->flush();
 
   String _resp = String(_str);
-  if ((getArgument(_resp, sr_relay_name_str) == sr_any_str) &&
-      (getArgument(_resp, sr_command_str) == sr_respond_str))
+  if (getArgument(_resp, sr_command_str) == sr_respond_str)
   {
-    for (uint8_t i = 0; i < relayCount; i++)
+    String r_name = getArgument(_resp, sr_relay_name_str);
+    if (r_name == sr_any_str)
     {
-      String s = getJsonStringToSend(relayArray[i].relayName, sr_ok_str, sr_respond_str);
-      Serial.print(relayArray[i].relayName);
-      Serial.print(F(": request received, response - "));
-      Serial.println(sr_ok_str);
-      sendUdpPacket(udp->remoteIP(), s.c_str(), s.length());
+      for (uint8_t i = 0; i < relayCount; i++)
+      {
+        respondToRelayCheck(i);
+      }
+    }
+    else
+    {
+      respondToRelayCheck(getRelayIndexByName(r_name));
     }
   }
   else
@@ -116,7 +138,7 @@ void RelayControl::receiveUdpPacket(int _size)
   }
 }
 
-int8_t RelayControl::getRelayIndexByName(String &_res)
+int8_t shRelayControl::getRelayIndexByName(String &_res)
 {
   int8_t result = -1;
   String name = getArgument(_res, sr_relay_name_str);
@@ -135,30 +157,30 @@ int8_t RelayControl::getRelayIndexByName(String &_res)
   return result;
 }
 
-void RelayControl::switchRelay(int8_t index)
+void shRelayControl::switchRelay(int8_t index)
 {
   if ((index >= 0) && (index <= relayCount))
   {
     digitalWrite(relayArray[index].relayPin, !digitalRead(relayArray[index].relayPin));
-    Serial.print(relayArray[index].relayName);
-    Serial.print(F(": state - "));
-    Serial.println(getRelayState(index));
+    print(relayArray[index].relayName);
+    print(F(": state - "));
+    println(getRelayState(index));
   }
 }
 
-void RelayControl::switchRelay(String _name)
+void shRelayControl::switchRelay(String _name)
 {
   switchRelay(getRelayIndexByName(_name));
 }
 
-String RelayControl::getRelayState(int8_t index)
+String shRelayControl::getRelayState(int8_t index)
 {
   String result = sr_off_str;
 
   if ((index >= 0) && (index <= relayCount))
   {
     bool state = digitalRead(relayArray[index].relayPin);
-    if (!relayArray[index].relayControlLevel)
+    if (!relayArray[index].shRelayControlLevel)
     {
       state = !state;
     }
@@ -167,20 +189,24 @@ String RelayControl::getRelayState(int8_t index)
   return (result);
 }
 
-String RelayControl::getRelayState(String _name)
+String shRelayControl::getRelayState(String _name)
 {
   return (getRelayState(getRelayIndexByName(_name)));
 }
 
-// ==== SwitchControl class ==========================
+// ==== shSwitchControl class ==========================
 
-SwitchControl::SwitchControl() {}
+shSwitchControl::shSwitchControl() {}
 
-void SwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
+void shSwitchControl::setLogOnState(bool _on) { logOn = _on; }
 
-uint32_t SwitchControl::getCheckTimer() { return (checkTimer); }
+bool shSwitchControl::getLogOnState() { return (logOn); }
 
-void SwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, SwitchData *_relay_array)
+void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
+
+uint32_t shSwitchControl::getCheckTimer() { return (checkTimer); }
+
+void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shSwitchData *_relay_array)
 {
   udp = _udp;
   localPort = _local_port;
@@ -189,7 +215,7 @@ void SwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_co
   broadcastAddress = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
 }
 
-void SwitchControl::tick()
+void shSwitchControl::tick()
 {
   for (uint8_t i = 0; i < relayCount; i++)
   {
@@ -213,7 +239,7 @@ void SwitchControl::tick()
     receiveUdpPacket(packet_size);
 }
 
-String SwitchControl::getJsonStringToSend(String _name, String _comm)
+String shSwitchControl::getJsonStringToSend(String _name, String _comm)
 {
   StaticJsonDocument<256> doc;
 
@@ -226,7 +252,7 @@ String SwitchControl::getJsonStringToSend(String _name, String _comm)
   return (_res);
 }
 
-void SwitchControl::receiveUdpPacket(int _size)
+void shSwitchControl::receiveUdpPacket(int _size)
 {
   char _str[_size];
 
@@ -244,28 +270,28 @@ void SwitchControl::receiveUdpPacket(int _size)
       {
         relayArray[relay_index].relayAddress = udp->remoteIP();
         relayArray[relay_index].relayFound = true;
-        Serial.print(relayArray[relay_index].relayName);
-        Serial.print(F(" found, IP address: "));
-        Serial.println(relayArray[relay_index].relayAddress.toString());
+        print(relayArray[relay_index].relayName);
+        print(F(" found, IP address: "));
+        println(relayArray[relay_index].relayAddress.toString());
       }
       else if (arg_for == sr_command_str)
       {
         relayArray[relay_index].relayFound = true;
         String s = getArgument(_resp, sr_response_str);
-        Serial.print(relayArray[relay_index].relayName);
-        Serial.print(F(" response - "));
-        Serial.println(s);
+        print(relayArray[relay_index].relayName);
+        print(F(" response - "));
+        println(s);
       }
     }
   }
   else
   {
-    Serial.print(F("Skip broadcast packet "));
-    Serial.println(udp->remoteIP().toString());
+    print(F("Skip broadcast packet "));
+    println(udp->remoteIP().toString());
   }
 }
 
-int8_t SwitchControl::getRelayIndexByName(String &_res)
+int8_t shSwitchControl::getRelayIndexByName(String &_res)
 {
   int8_t result = -1;
   String name = getArgument(_res, sr_relay_name_str);
@@ -284,38 +310,38 @@ int8_t SwitchControl::getRelayIndexByName(String &_res)
   return result;
 }
 
-void SwitchControl::switchRelay(int8_t index)
+void shSwitchControl::switchRelay(int8_t index)
 {
   if ((index >= 0) && (index <= relayCount))
   {
     if (relayArray[index].relayFound)
     {
       String s = getJsonStringToSend(relayArray[index].relayName, sr_switch_str);
-      Serial.println(F("Sending a request to switch the relay"));
-      Serial.print(F("Relay name: "));
-      Serial.print(relayArray[index].relayName);
-      Serial.print(F("; IP: "));
-      Serial.println(relayArray[index].relayAddress.toString());
+      println(F("Sending a request to switch the relay"));
+      print(F("Relay name: "));
+      print(relayArray[index].relayName);
+      print(F("; IP: "));
+      println(relayArray[index].relayAddress.toString());
       relayArray[index].relayFound = false;
       sendUdpPacket(relayArray[index].relayAddress, s.c_str(), s.length());
     }
     else
     {
-      Serial.print(F("Relay "));
-      Serial.print(relayArray[index].relayName);
-      Serial.println(F(" not found!"));
+      print(F("Relay "));
+      print(relayArray[index].relayName);
+      println(F(" not found!"));
       // TODO: подумать над звуковой индикацией ошибки
       findRelays();
     }
   }
 }
 
-void SwitchControl::switchRelay(String _name)
+void shSwitchControl::switchRelay(String _name)
 {
   switchRelay(getRelayIndexByName(_name));
 }
 
-void SwitchControl::findRelays()
+void shSwitchControl::findRelays()
 {
   for (uint8_t i = 0; i < relayCount; i++)
   {
@@ -323,9 +349,9 @@ void SwitchControl::findRelays()
   }
 
   String s = getJsonStringToSend(sr_any_str, sr_respond_str);
-  Serial.println(F("Sending a request to check IP addresses of relays"));
-  Serial.print(F("Broadcast address: "));
-  Serial.println(broadcastAddress.toString());
+  println(F("Sending a request to check IP addresses of relays"));
+  print(F("Broadcast address: "));
+  println(broadcastAddress.toString());
   sendUdpPacket(broadcastAddress, s.c_str(), s.length());
 }
 
@@ -343,8 +369,8 @@ bool getValueOfArgument(String &_res, String _arg, String &_str)
   }
   else
   {
-    Serial.println(F("invalid response data"));
-    Serial.println(error.f_str());
+    println(F("invalid response data"));
+    println(error.f_str());
   }
 
   if (result)
@@ -362,10 +388,10 @@ bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize)
   bool result = udp->endPacket() == 1;
   if (!result)
   {
-    Serial.print(F("Error sending UDP packet for IP "));
-    Serial.print(address.toString());
-    Serial.print(F(", remote port: "));
-    Serial.print(localPort);
+    print(F("Error sending UDP packet for IP "));
+    print(address.toString());
+    print(F(", remote port: "));
+    print((String)localPort);
   }
   return (result);
 }
@@ -375,4 +401,20 @@ String getArgument(String _res, String _arg)
   String result = "";
   getValueOfArgument(_res, _arg, result);
   return result;
+}
+
+void print(String _str)
+{
+  if (logOn)
+  {
+    print(_str);
+  }
+}
+
+void println(String _str)
+{
+  if (logOn)
+  {
+    println(_str);
+  }
 }

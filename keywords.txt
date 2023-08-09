@@ -1,0 +1,32 @@
+#######################################
+# Syntax Coloring Map For shTaskManager
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+shRelayData	KEYWORD1
+shSwitchData	KEYWORD1
+shRelayControl	KEYWORD1
+shSwitchControl	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2) 
+#######################################
+
+setLogOnState	KEYWORD2
+getLogOnState	KEYWORD2
+begin	KEYWORD2
+tick	KEYWORD2
+switchRelay	KEYWORD2
+getRelayState	KEYWORD2
+setCheckTimer	KEYWORD2
+getCheckTimer	KEYWORD2
+findRelays	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+

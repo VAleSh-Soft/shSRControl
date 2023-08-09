@@ -12,36 +12,39 @@
 #include <shButton.h>
 
 // описание свойств реле
-struct RelayData
+struct shRelayData
 {
   String relayName;          // имя реле
   uint8_t relayPin;          // пин, к которому подключено реле
-  uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
+  uint8_t shRelayControlLevel; // управляющий уровень реле (LOW или HIGH)
   shButton *relayButton;     // локальная кнопка, управляющая реле (располагается на самом модуле и предназначена для ручного управления реле)
 };
 
 // описание свойств выключателя
-struct SwitchData
+struct shSwitchData
 {
-  String relayName;       // имя ассоциированного с кнопкой реле
-  bool relayFound;        // найдено или нет реле в сети
-  IPAddress relayAddress; // IP адрес реле
-  shButton *relayButton;  // кнопка, управляющая реле
+  String relayName;       // имя ассоциированного с кнопкой удаленного реле
+  bool relayFound;        // найдено или нет ассоциированное удаленное реле в сети
+  IPAddress relayAddress; // IP адрес удаленного реле
+  shButton *relayButton;  // кнопка, управляющая удаленным реле
 };
 
-class RelayControl
+class shRelayControl
 {
 private:
-  uint8_t relayCount = 0;
-  RelayData *relayArray = NULL;
+  int8_t relayCount = 0;
+  shRelayData *relayArray = NULL;
 
   String getJsonStringToSend(String _name, String _comm, String _for);
+  void respondToRelayCheck(int8_t index);
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String &_res);
 
 public:
-  RelayControl();
-  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, RelayData *relay_array);
+  shRelayControl();
+  void setLogOnState(bool _on);
+  bool getLogOnState();
+  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shRelayData *relay_array);
   void tick();
   void switchRelay(int8_t index);
   void switchRelay(String _name);
@@ -49,11 +52,11 @@ public:
   String getRelayState(String _name);
 };
 
-class SwitchControl
+class shSwitchControl
 {
 private:
-  uint8_t relayCount = 0;
-  SwitchData *relayArray = NULL;
+  int8_t relayCount = 0;
+  shSwitchData *relayArray = NULL;
   IPAddress broadcastAddress;
   uint32_t checkTimer = 30000;
 
@@ -62,10 +65,12 @@ private:
   int8_t getRelayIndexByName(String &_res);
 
 public:
-  SwitchControl();
+  shSwitchControl();
+  void setLogOnState(bool _on);
+  bool getLogOnState();
   void setCheckTimer(uint32_t _timer);
   uint32_t getCheckTimer();
-  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, SwitchData *relay_array);
+  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shSwitchData *relay_array);
   void tick();
   void switchRelay(int8_t index);
   void switchRelay(String _name);
