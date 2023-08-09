@@ -409,7 +409,7 @@ void print(String _str)
 {
   if (logOn)
   {
-    print(_str);
+    Serial.print(_str);
   }
 }
 
@@ -417,6 +417,6 @@ void println(String _str)
 {
   if (logOn)
   {
-    println(_str);
+    Serial.println(_str);
   }
 }
