@@ -132,3 +132,5 @@ void loop()
 Для работы модулей требуются сторонние библиотеки:
 - `shButton.h` - https://github.com/VAleSh-Soft/shButton - работа с тактовыми кнопками;
 - `ArduinoJson.h` (не ниже версии 6.0) - https://github.com/bblanchon/ArduinoJson - работа с данными в формате JSON;
+
+Если возникнут вопросы, пишите на valesh-soft@yandex.ru 
