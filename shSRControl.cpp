@@ -256,8 +256,7 @@ String shSwitchControl::getJsonStringToSend(String _name, String _comm)
 
 void shSwitchControl::receiveUdpPacket(int _size)
 {
-  char _str[_size];
-
+  char _str[_size + 1] = {0};
   udp->read(_str, _size);
   udp->flush();
 
@@ -391,11 +390,11 @@ bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize)
 {
   udp->beginPacket(address, localPort);
 
-  uint8_t *_buf= new uint8_t[bufSize];
+  uint8_t *_buf = new uint8_t[bufSize];
   memcpy(_buf, buf, bufSize);
   udp->write(_buf, bufSize);
   delete[] _buf;
-  
+
   bool result = udp->endPacket() == 1;
   if (!result)
   {
