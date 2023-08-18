@@ -1,16 +1,35 @@
+/**
+ * @file switch_control.ino
+ * @author Vladimir Shatalov (valesh-soft@yandex.ru)
+ * @brief WiFi switch module
+ * @version 1.0
+ * @date 18.08.2023
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include <WiFiUdp.h>
+#include <FS.h>
 #include <shButton.h>
 #include <shSRControl.h>
 
 // модуль WiFi-выключателя
+
+#define FILESYSTEM SPIFFS
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
 
 const uint16_t localPort = 54321; // локальный порт для прослушивания udp-пакетов
 
+ESP8266WebServer HTTP(80);
 WiFiUDP udp;
+
+#if FILESYSTEM == LittleFS
+#include <LittleFS.h>
+#endif
 
 const int8_t ledPin = LED_BUILTIN;
 
@@ -68,17 +87,25 @@ void setup()
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
     switch_control.begin(&udp, localPort, relays_count, relays);
+    // подключаем Web-интерфейс
+    if (FILESYSTEM.begin())
+    {
+      switch_control.attachWebInterface(&HTTP, &FILESYSTEM);
+    }
   }
   else
   {
     Serial.println(F("failed, restart"));
     ESP.restart();
   }
+  HTTP.begin();
 }
 
 void loop()
 {
   switch_control.tick();
+
+  HTTP.handleClient();
 
   delay(1);
 }
