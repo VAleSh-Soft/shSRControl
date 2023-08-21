@@ -43,7 +43,6 @@ struct shSwitchData
 class shRelayControl
 {
 private:
-  String getJsonStringToSend(String _name, String _descr, String _comm, String _for);
   void respondToRelayCheck(int8_t index);
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String &_res);
@@ -235,10 +234,8 @@ public:
 class shSwitchControl
 {
 private:
-  IPAddress broadcastAddress;
   uint32_t checkTimer = 30000;
 
-  String getJsonStringToSend(String _name, String _comm);
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String &_res);
 

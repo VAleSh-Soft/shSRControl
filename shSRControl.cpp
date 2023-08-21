@@ -42,6 +42,7 @@ static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
 static const char SR_SET_CONFIG[] PROGMEM = "/sr_setconfig";
 static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
 static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
+static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
 
 enum ModuleType : uint8_t
 {
@@ -64,6 +65,8 @@ static uint16_t localPort = 0;
 static bool logOn = true;
 static bool save_state_of_relay = false;
 
+static IPAddress broadcastAddress;
+
 #if defined(ARDUINO_ARCH_ESP32)
 static WebServer *http_server = NULL;
 #else
@@ -73,14 +76,24 @@ static FS *file_system = NULL;
 
 // ===================================================
 
-static bool getValueOfArgument(String &_res, String _arg, String &_str);
-static bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize);
-static String getArgument(String _res, String _arg);
+static bool get_value_of_argument(String &_res, String _arg, String &_str);
+static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t bufSize);
+static String get_argument(String _res, String _arg);
+static String get_json_string_to_send(String _name, String _comm);
+static String get_json_string_to_send(String _name,
+                                      String _descr,
+                                      String _comm,
+                                      String _for);
+
 static void print(String _str);
 static void println(String _str);
 
 static void switch_relay(int8_t index);
 static String get_relay_state(int8_t index);
+
+static void switch_remote_relay(int8_t index);
+
+static void find_remote_relays();
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -99,6 +112,7 @@ static void handleGetSwitchConfig();
 static void handleSetConfig();
 
 static void handleRelaySwitch();
+static void handleRemoteRelaySwitch();
 static void handleGetRelayState();
 
 static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc);
@@ -185,33 +199,18 @@ void shRelayControl::tick()
     receiveUdpPacket(packet_size);
 }
 
-String shRelayControl::getJsonStringToSend(String _name, String _descr, String _comm, String _for)
-{
-  StaticJsonDocument<256> doc;
-
-  doc[sr_name_str] = _name;
-  doc[sr_descr_str] = _descr;
-  doc[sr_for_str] = _for;
-  doc[sr_response_str] = _comm;
-
-  String _res = "";
-  serializeJson(doc, _res);
-
-  return (_res);
-}
-
 void shRelayControl::respondToRelayCheck(int8_t index)
 {
   if ((index >= 0) && (index < relayCount))
   {
-    String s = getJsonStringToSend(relayArray[index].relayName,
-                                   relayArray[index].relayDescription,
-                                   sr_ok_str,
-                                   sr_respond_str);
+    String s = get_json_string_to_send(relayArray[index].relayName,
+                                       relayArray[index].relayDescription,
+                                       sr_ok_str,
+                                       sr_respond_str);
     print(relayArray[index].relayName);
     print(F(": request received, response - "));
     println(sr_ok_str);
-    sendUdpPacket(udp->remoteIP(), s.c_str(), s.length());
+    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
   }
 }
 
@@ -223,9 +222,9 @@ void shRelayControl::receiveUdpPacket(int _size)
   udp->flush();
 
   String _resp = String(_str);
-  if (getArgument(_resp, sr_command_str) == sr_respond_str)
+  if (get_argument(_resp, sr_command_str) == sr_respond_str)
   {
-    String r_name = getArgument(_resp, sr_name_str);
+    String r_name = get_argument(_resp, sr_name_str);
     if (r_name == sr_any_str)
     {
       for (uint8_t i = 0; i < relayCount; i++)
@@ -242,15 +241,15 @@ void shRelayControl::receiveUdpPacket(int _size)
   {
     int8_t relay_index = getRelayIndexByName(_resp);
     if ((relay_index >= 0) &&
-        (getArgument(_resp, sr_command_str) == sr_switch_str))
+        (get_argument(_resp, sr_command_str) == sr_switch_str))
     {
       switchRelay(relay_index);
 
-      String s = getJsonStringToSend(relayArray[relay_index].relayName,
-                                     relayArray[relay_index].relayDescription,
-                                     getRelayState(relay_index),
-                                     sr_command_str);
-      sendUdpPacket(udp->remoteIP(), s.c_str(), s.length());
+      String s = get_json_string_to_send(relayArray[relay_index].relayName,
+                                         relayArray[relay_index].relayDescription,
+                                         getRelayState(relay_index),
+                                         sr_command_str);
+      send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
     }
   }
 }
@@ -258,7 +257,7 @@ void shRelayControl::receiveUdpPacket(int _size)
 int8_t shRelayControl::getRelayIndexByName(String &_res)
 {
   int8_t result = -1;
-  String name = getArgument(_res, sr_name_str);
+  String name = get_argument(_res, sr_name_str);
   if (name.length() > 0)
   {
     for (int8_t i = 0; i < relayCount; i++)
@@ -391,7 +390,7 @@ void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _switch
   switchArray = _switch_array;
   broadcastAddress = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
   // выполнить первичный поиск привязанных реле
-  findRelays();
+  find_remote_relays();
 }
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -417,6 +416,8 @@ void shSwitchControl::attachWebInterface(ESP8266WebServer *_server,
   http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
   // сохранение настроек
   http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
+  // переключение реле
+  http_server->on(FPSTR(REMOTE_RELAY_SWITCH), HTTP_POST, handleRemoteRelaySwitch);
 }
 
 void shSwitchControl::tick()
@@ -435,25 +436,12 @@ void shSwitchControl::tick()
   if (millis() - timer >= checkTimer)
   {
     timer = millis();
-    findRelays();
+    find_remote_relays();
   }
 
   int packet_size = udp->parsePacket();
   if (packet_size > 0)
     receiveUdpPacket(packet_size);
-}
-
-String shSwitchControl::getJsonStringToSend(String _name, String _comm)
-{
-  StaticJsonDocument<256> doc;
-
-  doc[sr_name_str] = _name;
-  doc[sr_command_str] = _comm;
-
-  String _res = "";
-  serializeJson(doc, _res);
-
-  return (_res);
 }
 
 void shSwitchControl::receiveUdpPacket(int _size)
@@ -471,10 +459,10 @@ void shSwitchControl::receiveUdpPacket(int _size)
     if (relay_index >= 0)
     {
       switchArray[relay_index].relayFound = true;
-      String arg_for = getArgument(_resp, sr_for_str);
+      String arg_for = get_argument(_resp, sr_for_str);
       if (arg_for == sr_respond_str)
       {
-        switchArray[relay_index].relayDescription = getArgument(_resp, sr_descr_str);
+        switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
         switchArray[relay_index].relayAddress = udp->remoteIP();
         print(switchArray[relay_index].relayName);
         print(F(" found, IP address: "));
@@ -484,7 +472,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
       {
         print(switchArray[relay_index].relayName);
         print(F(" response - "));
-        println(getArgument(_resp, sr_response_str));
+        println(get_argument(_resp, sr_response_str));
       }
     }
 #if defined(ARDUINO_ARCH_ESP8266)
@@ -500,7 +488,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
 int8_t shSwitchControl::getRelayIndexByName(String &_res)
 {
   int8_t result = -1;
-  String name = getArgument(_res, sr_name_str);
+  String name = get_argument(_res, sr_name_str);
   if (name.length() > 0)
   {
     for (int8_t i = 0; i < switchCount; i++)
@@ -518,49 +506,17 @@ int8_t shSwitchControl::getRelayIndexByName(String &_res)
 
 void shSwitchControl::switchRelay(int8_t index)
 {
-  if ((index >= 0) &&
-      (index < switchCount) &&
-      (switchArray[index].relayName != emptyString))
-  {
-    if (switchArray[index].relayFound)
-    {
-      String s = getJsonStringToSend(switchArray[index].relayName, sr_switch_str);
-      println(F("Sending a request to switch the relay"));
-      print(F("Relay name: "));
-      print(switchArray[index].relayName);
-      print(F("; IP: "));
-      println(switchArray[index].relayAddress.toString());
-      switchArray[index].relayFound = false;
-      sendUdpPacket(switchArray[index].relayAddress, s.c_str(), s.length());
-    }
-    else
-    {
-      print(F("Relay "));
-      print(switchArray[index].relayName);
-      println(F(" not found!"));
-      // TODO: подумать над звуковой индикацией ошибки
-      findRelays();
-    }
-  }
+  switch_remote_relay(index);
 }
 
 void shSwitchControl::switchRelay(String _name)
 {
-  switchRelay(getRelayIndexByName(_name));
+  switch_remote_relay(getRelayIndexByName(_name));
 }
 
 void shSwitchControl::findRelays()
 {
-  for (uint8_t i = 0; i < relayCount; i++)
-  {
-    switchArray[i].relayFound = false;
-  }
-
-  String s = getJsonStringToSend(sr_any_str, sr_respond_str);
-  println(F("Sending a request to check IP addresses of relays"));
-  print(F("Broadcast address: "));
-  println(broadcastAddress.toString());
-  sendUdpPacket(broadcastAddress, s.c_str(), s.length());
+  find_remote_relays();
 }
 
 void shSwitchControl::setModuleDescription(String _descr)
@@ -613,7 +569,7 @@ bool shSwitchControl::loadConfig()
 
 // ===================================================
 
-bool getValueOfArgument(String &_res, String _arg, String &_str)
+static bool get_value_of_argument(String &_res, String _arg, String &_str)
 {
   StaticJsonDocument<256> doc;
 
@@ -637,7 +593,7 @@ bool getValueOfArgument(String &_res, String _arg, String &_str)
   return result;
 }
 
-bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize)
+static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t bufSize)
 {
   udp->beginPacket(address, localPort);
 
@@ -657,24 +613,52 @@ bool sendUdpPacket(const IPAddress &address, const char *buf, uint8_t bufSize)
   return (result);
 }
 
-String getArgument(String _res, String _arg)
+static String get_argument(String _res, String _arg)
 {
   String result = "";
-  getValueOfArgument(_res, _arg, result);
+  get_value_of_argument(_res, _arg, result);
   return result;
 }
 
-void print(String _str)
+static String get_json_string_to_send(String _name, String _descr, String _comm, String _for)
 {
-  if (logOn)
+  StaticJsonDocument<256> doc;
+
+  doc[sr_name_str] = _name;
+  doc[sr_descr_str] = _descr;
+  doc[sr_for_str] = _for;
+  doc[sr_response_str] = _comm;
+
+  String _res = "";
+  serializeJson(doc, _res);
+
+  return (_res);
+}
+
+static String get_json_string_to_send(String _name, String _comm)
+{
+  StaticJsonDocument<256> doc;
+
+  doc[sr_name_str] = _name;
+  doc[sr_command_str] = _comm;
+
+  String _res = "";
+  serializeJson(doc, _res);
+
+  return (_res);
+}
+
+static void print(String _str)
+{
+  if (logOn && Serial != NULL)
   {
     Serial.print(_str);
   }
 }
 
-void println(String _str)
+static void println(String _str)
 {
-  if (logOn)
+  if (logOn && Serial != NULL)
   {
     Serial.println(_str);
   }
@@ -712,6 +696,49 @@ static String get_relay_state(int8_t index)
     result = (state) ? sr_on_str : sr_off_str;
   }
   return (result);
+}
+
+static void switch_remote_relay(int8_t index)
+{
+  if ((index >= 0) &&
+      (index < switchCount) &&
+      (switchArray[index].relayName != emptyString))
+  {
+    if (switchArray[index].relayFound)
+    {
+      String s = get_json_string_to_send(switchArray[index].relayName,
+                                         sr_switch_str);
+      println(F("Sending a request to switch the relay"));
+      print(F("Relay name: "));
+      print(switchArray[index].relayName);
+      print(F("; IP: "));
+      println(switchArray[index].relayAddress.toString());
+      switchArray[index].relayFound = false;
+      send_udp_packet(switchArray[index].relayAddress, s.c_str(), s.length());
+    }
+    else
+    {
+      print(F("Relay "));
+      print(switchArray[index].relayName);
+      println(F(" not found!"));
+      // TODO: подумать над звуковой индикацией ошибки
+      find_remote_relays();
+    }
+  }
+}
+
+static void find_remote_relays()
+{
+  for (uint8_t i = 0; i < relayCount; i++)
+  {
+    switchArray[i].relayFound = false;
+  }
+
+  String s = get_json_string_to_send(sr_any_str, sr_respond_str);
+  println(F("Sending a request to check IP addresses of relays"));
+  print(F("Broadcast address: "));
+  println(broadcastAddress.toString());
+  send_udp_packet(broadcastAddress, s.c_str(), s.length());
 }
 
 // ==== реакции сервера ==============================
@@ -853,15 +880,31 @@ static void handleRelaySwitch()
   {
     String json = http_server->arg("plain");
 
-    StaticJsonDocument<2048> doc;
+    int8_t index = get_argument(json, sr_relay_str).toInt();
 
-    DeserializationError error = deserializeJson(doc, json);
-    if (!error)
-    {
-      uint8_t index = doc[sr_relay_str].as<byte>();
-      switch_relay(index);
-      http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
-    }
+    switch_relay(index);
+    http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
+  }
+  else
+  {
+    http_server->send(200, FPSTR(TEXT_HTML), sr_off_str);
+  }
+}
+
+static void handleRemoteRelaySwitch()
+{
+  if (http_server->hasArg("plain"))
+  {
+    String json = http_server->arg("plain");
+
+    int8_t index = get_argument(json, sr_relay_str).toInt();
+
+    switch_remote_relay(index);
+    http_server->send(200, FPSTR(TEXT_HTML), sr_ok_str);
+  }
+  else
+  {
+    http_server->send(200, FPSTR(TEXT_HTML), sr_no_str);
   }
 }
 
