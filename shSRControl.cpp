@@ -1,6 +1,7 @@
 #include "shSRControl.h"
 #include <ArduinoJson.h>
 #include "extras/c_page.h"
+#include "extras/i_page.h"
 
 // ==== имена параметров в запросах ==================
 static const String sr_name_str = "name";
@@ -39,6 +40,8 @@ static const char TEXT_JSON[] PROGMEM = "text/json";
 static const char RELAY_GET_CONFIG[] PROGMEM = "/relay_getconfig";
 static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
 static const char SR_SET_CONFIG[] PROGMEM = "/sr_setconfig";
+static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
+static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 
 enum ModuleType : uint8_t
 {
@@ -76,10 +79,16 @@ static String getArgument(String _res, String _arg);
 static void print(String _str);
 static void println(String _str);
 
+static void switch_relay(int8_t index);
+static String get_relay_state(int8_t index);
+
 // ===================================================
-static void handleGetConfigPage(String arg);
+static void handleGetConfigPage(String arg, String page);
 static void handleGetRelayConfigPage();
 static void handleGetSwitchConfigPage();
+
+static void handleGetRelayIndexPage();
+static void handleGetSwitchIndexPage();
 
 static void handleGetConfig(String _msg);
 static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name, String _descr, int8_t _last = -1);
@@ -88,6 +97,9 @@ static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 
 static void handleSetConfig();
+
+static void handleRelaySwitch();
+static void handleGetRelayState();
 
 static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc);
 
@@ -143,12 +155,18 @@ void shRelayControl::attachWebInterface(ESP8266WebServer *_server,
     }
   }
 
+  // вызов стартовой страницы модуля реле
+  http_server->on("/", HTTP_GET, handleGetRelayIndexPage);
   // вызов страницы настройки модуля реле
   http_server->on(_config_page, HTTP_GET, handleGetRelayConfigPage);
   // запрос текущих настроек
   http_server->on(FPSTR(RELAY_GET_CONFIG), HTTP_GET, handleGetRelayConfig);
   // сохранение настроек
   http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
+  // переключение реле
+  http_server->on(FPSTR(RELAY_SWITCH), HTTP_POST, handleRelaySwitch);
+  // запрос текущего состояния всех реле
+  http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
 }
 
 void shRelayControl::tick()
@@ -258,46 +276,22 @@ int8_t shRelayControl::getRelayIndexByName(String &_res)
 
 void shRelayControl::switchRelay(int8_t index)
 {
-  if ((index >= 0) && (index < relayCount))
-  {
-    uint8_t state = !digitalRead(relayArray[index].relayPin);
-    digitalWrite(relayArray[index].relayPin, state);
-    relayArray[index].relayLastState = getRelayState(index) == sr_on_str;
-    if (save_state_of_relay)
-    {
-      saveConfigFile(mtRelay);
-    }
-
-    print(relayArray[index].relayName);
-    print(F(": state - "));
-    println(getRelayState(index));
-  }
+  switch_relay(index);
 }
 
 void shRelayControl::switchRelay(String _name)
 {
-  switchRelay(getRelayIndexByName(_name));
+  switch_relay(getRelayIndexByName(_name));
 }
 
 String shRelayControl::getRelayState(int8_t index)
 {
-  String result = sr_off_str;
-
-  if ((index >= 0) && (index < relayCount))
-  {
-    bool state = digitalRead(relayArray[index].relayPin);
-    if (!relayArray[index].relayControlLevel)
-    {
-      state = !state;
-    }
-    result = (state) ? sr_on_str : sr_off_str;
-  }
-  return (result);
+  return (get_relay_state(index));
 }
 
 String shRelayControl::getRelayState(String _name)
 {
-  return (getRelayState(getRelayIndexByName(_name)));
+  return (get_relay_state(getRelayIndexByName(_name)));
 }
 
 void shRelayControl::setModuleDescription(String _descr)
@@ -415,7 +409,9 @@ void shSwitchControl::attachWebInterface(ESP8266WebServer *_server,
 
   loadConfigFile(mtSwitch);
 
-  // вызов страницы настройки модуля реле
+  // вызов стартовой страницы модуля выключателя
+  http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
+  // вызов страницы настройки модуля выключателей
   http_server->on(_config_page, HTTP_GET, handleGetSwitchConfigPage);
   // запрос текущих настроек
   http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
@@ -684,23 +680,66 @@ void println(String _str)
   }
 }
 
-// ==== реакции сервера ==============================
-static void handleGetConfigPage(String arg)
+static void switch_relay(int8_t index)
 {
-  String c_page = (String)FPSTR(config_page);
+  if ((index >= 0) && (index < relayCount))
+  {
+    uint8_t state = !digitalRead(relayArray[index].relayPin);
+    digitalWrite(relayArray[index].relayPin, state);
+    relayArray[index].relayLastState = get_relay_state(index) == sr_on_str;
+    if (save_state_of_relay)
+    {
+      saveConfigFile(mtRelay);
+    }
+
+    print(relayArray[index].relayName);
+    print(F(": state - "));
+    println(get_relay_state(index));
+  }
+}
+
+static String get_relay_state(int8_t index)
+{
+  String result = sr_off_str;
+
+  if ((index >= 0) && (index < relayCount))
+  {
+    bool state = digitalRead(relayArray[index].relayPin);
+    if (!relayArray[index].relayControlLevel)
+    {
+      state = !state;
+    }
+    result = (state) ? sr_on_str : sr_off_str;
+  }
+  return (result);
+}
+
+// ==== реакции сервера ==============================
+static void handleGetConfigPage(String arg, String page)
+{
   String c_lab = F("<p id='label'>");
-  c_page.replace(c_lab, c_lab + arg);
-  http_server->send(200, FPSTR(TEXT_HTML), c_page);
+  page.replace(c_lab, c_lab + arg);
+  http_server->send(200, FPSTR(TEXT_HTML), page);
 }
 
 static void handleGetRelayConfigPage()
 {
-  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG));
+  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(config_page));
 }
 
 static void handleGetSwitchConfigPage()
 {
-  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG));
+  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(config_page));
+}
+
+static void handleGetRelayIndexPage()
+{
+  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(index_page));
+}
+
+static void handleGetSwitchIndexPage()
+{
+  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(index_page));
 }
 
 static void handleGetConfig(String _msg)
@@ -806,6 +845,41 @@ static void handleSetConfig()
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
+}
+
+static void handleRelaySwitch()
+{
+  if (http_server->hasArg("plain"))
+  {
+    String json = http_server->arg("plain");
+
+    StaticJsonDocument<2048> doc;
+
+    DeserializationError error = deserializeJson(doc, json);
+    if (!error)
+    {
+      uint8_t index = doc[sr_relay_str].as<byte>();
+      switch_relay(index);
+      http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
+    }
+  }
+}
+
+static void handleGetRelayState()
+{
+  StaticJsonDocument<2048> doc;
+  JsonArray relays = doc.createNestedArray(sr_relays_str);
+  for (int8_t i = 0; i < relayCount; i++)
+  {
+    JsonObject rel = relays.createNestedObject();
+    getRelayDataString(rel,
+                       relayArray[i].relayName,
+                       relayArray[i].relayDescription,
+                       (byte)relayArray[i].relayLastState);
+  }
+  String _res = "";
+  serializeJson(doc, _res);
+  http_server->send(200, FPSTR(TEXT_JSON), _res);
 }
 
 static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc)

@@ -289,6 +289,7 @@ public:
    */
   void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _switch_count, shSwitchData *_switch_array);
 
+#if defined(ARDUINO_ARCH_ESP32)
   /**
    * @brief подключение Web-интерфейса
    *
@@ -296,7 +297,6 @@ public:
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
    */
-#if defined(ARDUINO_ARCH_ESP32)
   void attachWebInterface(WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 #else
   /**
