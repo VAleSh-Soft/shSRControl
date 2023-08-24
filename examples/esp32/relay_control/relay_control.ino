@@ -60,8 +60,18 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
-  pinMode(ledPin, OUTPUT);
+  // не забудьте, форматировать файловую систему нужно только при первом запуске
+  if (FORMAT_FILESYSTEM)
+  {
+    FILESYSTEM.format();
+  }
+  // подключаем Web-интерфейс
+  if (FILESYSTEM.begin())
+  {
+    relay_control.attachWebInterface(&HTTP, &FILESYSTEM);
+  }
 
+  pinMode(ledPin, OUTPUT);
   Serial.print(F("Connecting to "));
   Serial.println(ssid);
   WiFi.begin(ssid, pass);
@@ -87,17 +97,6 @@ void setup()
     Serial.println(F("OK"));
     // запустить контроль модуля реле
     relay_control.begin(&udp, localPort, relays_count, relays);
-    
-    // не забудьте, форматировать файловую систему нужно только при первом запуске
-    if (FORMAT_FILESYSTEM)
-    {
-      FILESYSTEM.format();
-    }
-    // подключаем Web-интерфейс
-    if (FILESYSTEM.begin())
-    {
-      relay_control.attachWebInterface(&HTTP, &FILESYSTEM);
-    }
   }
   else
   {

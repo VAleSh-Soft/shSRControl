@@ -4,9 +4,9 @@
  * @brief WiFi switch module
  * @version 1.0
  * @date 18.08.2023
- * 
+ *
  * @copyright Copyright (c) 2023
- * 
+ *
  */
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -61,8 +61,18 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
-  pinMode(ledPin, OUTPUT);
+  // не забудьте, форматировать файловую систему нужно только при первом запуске
+  if (FORMAT_FILESYSTEM)
+  {
+    FILESYSTEM.format();
+  }
+  // подключаем Web-интерфейс
+  if (FILESYSTEM.begin())
+  {
+    switch_control.attachWebInterface(&HTTP, &FILESYSTEM);
+  }
 
+  pinMode(ledPin, OUTPUT);
   Serial.print(F("Connecting to "));
   Serial.println(ssid);
   WiFi.begin(ssid, pass);
@@ -90,16 +100,6 @@ void setup()
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
     switch_control.begin(&udp, localPort, relays_count, relays);
-    // не забудьте, форматировать файловую систему нужно только при первом запуске
-    if (FORMAT_FILESYSTEM)
-    {
-      FILESYSTEM.format();
-    }
-    // подключаем Web-интерфейс
-    if (FILESYSTEM.begin())
-    {
-      switch_control.attachWebInterface(&HTTP, &FILESYSTEM);
-    }
   }
   else
   {

@@ -4,9 +4,9 @@
  * @brief WiFi relay module
  * @version 1.0
  * @date 18.08.2023
- * 
+ *
  * @copyright Copyright (c) 2023
- * 
+ *
  */
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -57,8 +57,13 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
-  pinMode(ledPin, OUTPUT);
+  // подключаем Web-интерфейс
+  if (FILESYSTEM.begin())
+  {
+    relay_control.attachWebInterface(&HTTP, &FILESYSTEM);
+  }
 
+  pinMode(ledPin, OUTPUT);
   Serial.print(F("Connecting to "));
   Serial.println(ssid);
   WiFi.begin(ssid, pass);
@@ -84,12 +89,6 @@ void setup()
     Serial.println(F("OK"));
     // запустить контроль модуля реле
     relay_control.begin(&udp, localPort, relays_count, relays);
-    // подключаем Web-интерфейс
-    if (FILESYSTEM.begin())
-    {
-      relay_control.attachWebInterface(&HTTP, &FILESYSTEM);
-    }
-
   }
   else
   {
