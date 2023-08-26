@@ -50,7 +50,7 @@ shRelayData relays[relays_count] = {
         LOW,
         NULL}};
 
-shRelayControl relay_control;
+shRelayControl relay_control(relays, relays_count);
 
 void setup()
 {
@@ -88,7 +88,7 @@ void setup()
   {
     Serial.println(F("OK"));
     // запустить контроль модуля реле
-    relay_control.begin(&udp, localPort, relays_count, relays);
+    relay_control.begin(&udp, localPort);
   }
   else
   {

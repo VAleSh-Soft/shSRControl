@@ -51,7 +51,7 @@ shSwitchData relays[relays_count] = {
         IPAddress(192, 168, 4, 1),
         &btn2}};
 
-shSwitchControl switch_control;
+shSwitchControl switch_control(relays, relays_count);
 
 void setup()
 {
@@ -91,7 +91,7 @@ void setup()
     // установить интервал проверки доступности реле - 60 сек
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
-    switch_control.begin(&udp, localPort, relays_count, relays);
+    switch_control.begin(&udp, localPort);
   }
   else
   {

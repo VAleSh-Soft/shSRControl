@@ -65,8 +65,6 @@ static uint16_t localPort = 0;
 static bool logOn = true;
 static bool save_state_of_relay = false;
 
-static IPAddress broadcastAddress;
-
 #if defined(ARDUINO_ARCH_ESP32)
 static WebServer *http_server = NULL;
 #else
@@ -76,6 +74,7 @@ static FS *file_system = NULL;
 
 // ===================================================
 
+static IPAddress get_broadcast();
 static bool get_value_of_argument(String &_res, String _arg, String &_str);
 static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t bufSize);
 static String get_argument(String _res, String _arg);
@@ -105,6 +104,7 @@ static void handleGetSwitchIndexPage();
 
 static void handleGetConfig(String _msg);
 static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name, String _descr, int8_t _last = -1);
+static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl);
 static String getConfigString(ModuleType _mdl);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
@@ -119,22 +119,25 @@ static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc);
 
 static String getConfigFileName(ModuleType _mdt);
 static bool saveConfigFile(ModuleType _mdt);
+static bool saveConfigFile(ModuleType _mdt, StaticJsonDocument<2048> &doc);
 static bool loadConfigFile(ModuleType _mdt);
 
 // ==== shRelayControl class ===========================
 
-shRelayControl::shRelayControl() {}
+shRelayControl::shRelayControl(shRelayData *_relay_array, uint8_t _relay_count)
+{
+  relayArray = _relay_array;
+  relayCount = _relay_count;
+}
 
 void shRelayControl::setLogOnState(bool _on) { logOn = _on; }
 
 bool shRelayControl::getLogOnState() { return (logOn); }
 
-void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shRelayData *_relay_array)
+void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
   localPort = _local_port;
-  relayCount = _relay_count;
-  relayArray = _relay_array;
 
   for (uint8_t i = 0; i < relayCount; i++)
   {
@@ -372,7 +375,11 @@ bool shRelayControl::loadConfig()
 
 // ==== shSwitchControl class ==========================
 
-shSwitchControl::shSwitchControl() {}
+shSwitchControl::shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_count)
+{
+  switchCount = _switch_count;
+  switchArray = _switch_array;
+}
 
 void shSwitchControl::setLogOnState(bool _on) { logOn = _on; }
 
@@ -382,13 +389,10 @@ void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
 
 uint32_t shSwitchControl::getCheckTimer() { return (checkTimer); }
 
-void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _switch_count, shSwitchData *_switch_array)
+void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
   localPort = _local_port;
-  switchCount = _switch_count;
-  switchArray = _switch_array;
-  broadcastAddress = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
   // выполнить первичный поиск привязанных реле
   find_remote_relays();
 }
@@ -452,7 +456,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
 
   String _resp = String(_str);
 #if defined(ARDUINO_ARCH_ESP8266)
-  if ((udp->destinationIP() != broadcastAddress))
+  if ((udp->destinationIP() != get_broadcast()))
   {
 #endif
     int8_t relay_index = getRelayIndexByName(_resp);
@@ -569,6 +573,11 @@ bool shSwitchControl::loadConfig()
 
 // ===================================================
 
+static IPAddress get_broadcast()
+{
+  return ((uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask()));
+}
+
 static bool get_value_of_argument(String &_res, String _arg, String &_str)
 {
   StaticJsonDocument<256> doc;
@@ -608,7 +617,7 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t b
     print(F("Error sending UDP packet for IP "));
     print(address.toString());
     print(F(", remote port: "));
-    print((String)localPort);
+    println((String)localPort);
   }
   return (result);
 }
@@ -650,7 +659,7 @@ static String get_json_string_to_send(String _name, String _comm)
 
 static void print(String _str)
 {
-  if (logOn && Serial != NULL)
+  if (logOn && Serial)
   {
     Serial.print(_str);
   }
@@ -658,7 +667,7 @@ static void print(String _str)
 
 static void println(String _str)
 {
-  if (logOn && Serial != NULL)
+  if (logOn && Serial)
   {
     Serial.println(_str);
   }
@@ -734,6 +743,8 @@ static void find_remote_relays()
     switchArray[i].relayFound = false;
   }
 
+  IPAddress broadcastAddress = get_broadcast();
+
   String s = get_json_string_to_send(sr_any_str, sr_respond_str);
   println(F("Sending a request to check IP addresses of relays"));
   print(F("Broadcast address: "));
@@ -787,10 +798,8 @@ static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name,
   return (doc);
 }
 
-static String getConfigString(ModuleType _mdl)
+static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl)
 {
-  StaticJsonDocument<2048> doc;
-
   doc[sr_module_str] = module_description;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   switch (_mdl)
@@ -818,6 +827,13 @@ static String getConfigString(ModuleType _mdl)
     }
     break;
   }
+}
+
+static String getConfigString(ModuleType _mdl)
+{
+  StaticJsonDocument<2048> doc;
+
+  getConfigJsonDoc(doc, _mdl);
 
   String _res = "";
   serializeJson(doc, _res);
@@ -863,12 +879,12 @@ static void handleSetConfig()
     if (doc[sr_for_str].as<String>() == sr_relay_str)
     {
       loadSetting(mtRelay, doc);
-      saveConfigFile(mtRelay);
+      saveConfigFile(mtRelay, doc);
     }
     else if (doc[sr_for_str].as<String>() == sr_switch_str)
     {
       loadSetting(mtSwitch, doc);
-      saveConfigFile(mtSwitch);
+      saveConfigFile(mtSwitch, doc);
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
@@ -976,16 +992,22 @@ static String getConfigFileName(ModuleType _mdt)
 
 static bool saveConfigFile(ModuleType _mdt)
 {
-  String _res = getConfigString(_mdt);
+  StaticJsonDocument<2048> doc;
+  getConfigJsonDoc(doc, _mdt);
+  return (saveConfigFile(_mdt, doc));
+}
+
+static bool saveConfigFile(ModuleType _mdt, StaticJsonDocument<2048> &doc)
+{
   String fileName = getConfigFileName(_mdt);
 
   File configFile;
 
   // удалить существующий файл, иначе конфигурация будет добавлена ​​к файлу
-  file_system->remove(fileName);
+  if (file_system->remove(fileName))
 
-  // Открыть файл для записи
-  configFile = file_system->open(fileName, "w");
+    // Открыть файл для записи
+    configFile = file_system->open(fileName, "w");
 
   if (!configFile)
   {
@@ -994,11 +1016,13 @@ static bool saveConfigFile(ModuleType _mdt)
     return (false);
   }
 
-  int bufSize = _res.length();
-  uint8_t *_buf = new uint8_t[bufSize];
-  memcpy(_buf, _res.c_str(), bufSize);
-  configFile.write(_buf, bufSize);
-  delete[] _buf;
+  // сериализовать JSON-файл
+  bool result = serializeJson(doc, configFile);
+  if (!result)
+  {
+    print(F("Failed to write file "));
+    println(fileName);
+  }
 
   configFile.close();
   return (true);

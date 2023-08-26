@@ -52,7 +52,7 @@ public:
    * @brief конструктор
    *
    */
-  shRelayControl();
+  shRelayControl(shRelayData *_relay_array, uint8_t _relay_count);
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -77,7 +77,7 @@ public:
    * @param _relay_count количество реле в модуле
    * @param relay_array массив данных реле
    */
-  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _relay_count, shRelayData *_relay_array);
+  void begin(WiFiUDP *_udp, uint16_t _local_port);
 
 #if defined(ARDUINO_ARCH_ESP32)
   /**
@@ -244,7 +244,7 @@ public:
  * @brief конструктор
  * 
  */
-  shSwitchControl();
+  shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_count);
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -284,7 +284,7 @@ public:
    * @param _switch_count количество реле в модуле
    * @param _switch_array массив данных реле
    */
-  void begin(WiFiUDP *_udp, uint16_t _local_port, uint8_t _switch_count, shSwitchData *_switch_array);
+  void begin(WiFiUDP *_udp, uint16_t _local_port);
 
 #if defined(ARDUINO_ARCH_ESP32)
   /**
