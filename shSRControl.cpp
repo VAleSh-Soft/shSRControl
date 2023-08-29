@@ -178,18 +178,20 @@ void shRelayControl::attachWebInterface(ESP8266WebServer *_server,
     }
   }
 
-  // вызов стартовой страницы модуля реле
-  http_server->on("/", HTTP_GET, handleGetRelayIndexPage);
-  // вызов страницы настройки модуля реле
-  http_server->on(_config_page, HTTP_GET, handleGetRelayConfigPage);
-  // запрос текущих настроек
-  http_server->on(FPSTR(RELAY_GET_CONFIG), HTTP_GET, handleGetRelayConfig);
-  // сохранение настроек
-  http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
-  // переключение реле
-  http_server->on(FPSTR(RELAY_SWITCH), HTTP_POST, handleRelaySwitch);
-  // запрос текущего состояния всех реле
-  http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
+  if (http_server)
+  { // вызов стартовой страницы модуля реле
+    http_server->on("/", HTTP_GET, handleGetRelayIndexPage);
+    // вызов страницы настройки модуля реле
+    http_server->on(_config_page, HTTP_GET, handleGetRelayConfigPage);
+    // запрос текущих настроек
+    http_server->on(FPSTR(RELAY_GET_CONFIG), HTTP_GET, handleGetRelayConfig);
+    // сохранение настроек
+    http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
+    // переключение реле
+    http_server->on(FPSTR(RELAY_SWITCH), HTTP_POST, handleRelaySwitch);
+    // запрос текущего состояния всех реле
+    http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
+  }
 }
 
 void shRelayControl::tick()
@@ -418,16 +420,18 @@ void shSwitchControl::attachWebInterface(ESP8266WebServer *_server,
 
   load_config_file(mtSwitch);
 
-  // вызов стартовой страницы модуля выключателя
-  http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
-  // вызов страницы настройки модуля выключателей
-  http_server->on(_config_page, HTTP_GET, handleGetSwitchConfigPage);
-  // запрос текущих настроек
-  http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
-  // сохранение настроек
-  http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
-  // переключение реле
-  http_server->on(FPSTR(REMOTE_RELAY_SWITCH), HTTP_POST, handleRemoteRelaySwitch);
+  if (http_server)
+  { // вызов стартовой страницы модуля выключателя
+    http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
+    // вызов страницы настройки модуля выключателей
+    http_server->on(_config_page, HTTP_GET, handleGetSwitchConfigPage);
+    // запрос текущих настроек
+    http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
+    // сохранение настроек
+    http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
+    // переключение реле
+    http_server->on(FPSTR(REMOTE_RELAY_SWITCH), HTTP_POST, handleRemoteRelaySwitch);
+  }
 }
 
 void shSwitchControl::tick()
@@ -1007,6 +1011,11 @@ static bool save_config_file(ModuleType _mdt)
 
 static bool save_config_file(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc)
 {
+  if (!file_system)
+  {
+    return (false);
+  }
+
   String fileName = get_config_file_name(_mdt);
 
   File configFile;
@@ -1042,7 +1051,8 @@ static bool load_config_file(ModuleType _mdt)
   String fileName = get_config_file_name(_mdt);
 
   // находим и открываем для чтения файл конфигурации
-  bool result = file_system->exists(fileName) &&
+  bool result = file_system &&
+                file_system->exists(fileName) &&
                 (configFile = file_system->open(fileName, "r"));
 
   // если файл конфигурации не найден, сохранить настройки по умолчанию
