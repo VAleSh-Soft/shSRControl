@@ -98,6 +98,9 @@ void setup()
     Serial.println(F("failed, restart"));
     ESP.restart();
   }
+
+  HTTP.onNotFound([]()
+                  { HTTP.send(404, "text/plan", F("404. File not found.")); });
   HTTP.begin();
 }
 

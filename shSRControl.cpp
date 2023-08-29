@@ -29,8 +29,8 @@ static const String sr_any_str = "any_relay";
 {"name":"any_relay","command":"respond"}
 {"name":"relay1","command":"switch"}
 
-строка ответа реле - кто отвечает, на что отвечает и ответ: состояние реле после выполнения команды или "ok" в случае ответа на поиск; в последнем случае добавляется поле описания реле
-{"name":"relay1","for":"switch","resp":"off"}
+строка ответа реле - имя реле, описание, на что отвечает и ответ: состояние реле после выполнения команды или "ok" в случае ответа на поиск;
+{"name":"relay1","descr":"Розетка у окна","for":"switch","resp":"off"}
 {"name":"relay1","descr":"Розетка у окна","for":"respond","resp":"ok"}
 */
 
@@ -44,6 +44,10 @@ static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
 static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
 
+// константы для работы с JSON
+static const uint16_t CONFIG_SIZE = 2048;
+static const uint16_t RELAY_DATA_SIZE = 256;
+
 enum ModuleType : uint8_t
 {
   mtRelay,
@@ -55,13 +59,12 @@ enum ModuleType : uint8_t
 static shRelayData *relayArray = NULL;
 static int8_t relayCount = 0;
 static String relayFileConfigName = "/relay.json";
+
 static shSwitchData *switchArray = NULL;
 static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
 
 static String module_description = "";
-static WiFiUDP *udp = NULL;
-static uint16_t localPort = 0;
 static bool logOn = true;
 static bool save_state_of_relay = false;
 
@@ -71,6 +74,8 @@ static WebServer *http_server = NULL;
 static ESP8266WebServer *http_server = NULL;
 #endif
 static FS *file_system = NULL;
+static WiFiUDP *udp = NULL;
+static uint16_t localPort = 0;
 
 // ===================================================
 
@@ -87,7 +92,7 @@ static String get_json_string_to_send(String _name,
 static void print(String _str);
 static void println(String _str);
 
-static void switch_relay(int8_t index);
+static void switch_local_relay(int8_t index);
 static String get_relay_state(int8_t index);
 
 static void switch_remote_relay(int8_t index);
@@ -103,11 +108,12 @@ static void handleGetRelayIndexPage();
 static void handleGetSwitchIndexPage();
 
 static void handleGetConfig(String _msg);
-static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name, String _descr, int8_t _last = -1);
-static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl);
-static String getConfigString(ModuleType _mdl);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
+
+static StaticJsonDocument<RELAY_DATA_SIZE> get_relay_data_string(JsonObject &rel, String _name, String _descr, int8_t _last = -1);
+static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl);
+static String get_config_json_string(ModuleType _mdl);
 
 static void handleSetConfig();
 
@@ -115,12 +121,13 @@ static void handleRelaySwitch();
 static void handleRemoteRelaySwitch();
 static void handleGetRelayState();
 
-static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc);
+// ===================================================
+static bool load_setting(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc);
 
-static String getConfigFileName(ModuleType _mdt);
-static bool saveConfigFile(ModuleType _mdt);
-static bool saveConfigFile(ModuleType _mdt, StaticJsonDocument<2048> &doc);
-static bool loadConfigFile(ModuleType _mdt);
+static String get_config_file_name(ModuleType _mdt);
+static bool save_config_file(ModuleType _mdt);
+static bool save_config_file(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc);
+static bool load_config_file(ModuleType _mdt);
 
 // ==== shRelayControl class ===========================
 
@@ -128,6 +135,12 @@ shRelayControl::shRelayControl(shRelayData *_relay_array, uint8_t _relay_count)
 {
   relayArray = _relay_array;
   relayCount = _relay_count;
+
+  for (uint8_t i = 0; i < relayCount; i++)
+  {
+    digitalWrite(relayArray[i].relayPin, !relayArray[i].relayControlLevel);
+    pinMode(relayArray[i].relayPin, OUTPUT);
+  }
 }
 
 void shRelayControl::setLogOnState(bool _on) { logOn = _on; }
@@ -138,12 +151,6 @@ void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
   localPort = _local_port;
-
-  for (uint8_t i = 0; i < relayCount; i++)
-  {
-    digitalWrite(relayArray[i].relayPin, !relayArray[i].relayControlLevel);
-    pinMode(relayArray[i].relayPin, OUTPUT);
-  }
 }
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -159,10 +166,9 @@ void shRelayControl::attachWebInterface(ESP8266WebServer *_server,
   http_server = _server;
   file_system = _file_system;
 
-  // загрузка настроек и восстановление состояний реле, если задано
-  if (loadConfigFile(mtRelay) && save_state_of_relay)
+  if (load_config_file(mtRelay) && save_state_of_relay)
   {
-    for (int8_t i = 0; i < relayCount; i++)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
       if (relayArray[i].relayLastState)
       {
@@ -278,12 +284,12 @@ int8_t shRelayControl::getRelayIndexByName(String &_res)
 
 void shRelayControl::switchRelay(int8_t index)
 {
-  switch_relay(index);
+  switch_local_relay(index);
 }
 
 void shRelayControl::switchRelay(String _name)
 {
-  switch_relay(getRelayIndexByName(_name));
+  switch_local_relay(getRelayIndexByName(_name));
 }
 
 String shRelayControl::getRelayState(int8_t index)
@@ -365,12 +371,12 @@ String shRelayControl::getFileName()
 
 bool shRelayControl::saveConfige()
 {
-  return (saveConfigFile(mtRelay));
+  return (save_config_file(mtRelay));
 }
 
 bool shRelayControl::loadConfig()
 {
-  return (loadConfigFile(mtRelay));
+  return (load_config_file(mtRelay));
 }
 
 // ==== shSwitchControl class ==========================
@@ -410,7 +416,7 @@ void shSwitchControl::attachWebInterface(ESP8266WebServer *_server,
   http_server = _server;
   file_system = _file_system;
 
-  loadConfigFile(mtSwitch);
+  load_config_file(mtSwitch);
 
   // вызов стартовой страницы модуля выключателя
   http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
@@ -563,12 +569,12 @@ String shSwitchControl::getFileName()
 
 bool shSwitchControl::saveConfige()
 {
-  return (saveConfigFile(mtSwitch));
+  return (save_config_file(mtSwitch));
 }
 
 bool shSwitchControl::loadConfig()
 {
-  return (loadConfigFile(mtSwitch));
+  return (load_config_file(mtSwitch));
 }
 
 // ===================================================
@@ -580,7 +586,7 @@ static IPAddress get_broadcast()
 
 static bool get_value_of_argument(String &_res, String _arg, String &_str)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
   DeserializationError error = deserializeJson(doc, _res);
   bool result = !error;
@@ -631,7 +637,7 @@ static String get_argument(String _res, String _arg)
 
 static String get_json_string_to_send(String _name, String _descr, String _comm, String _for)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
   doc[sr_name_str] = _name;
   doc[sr_descr_str] = _descr;
@@ -646,7 +652,7 @@ static String get_json_string_to_send(String _name, String _descr, String _comm,
 
 static String get_json_string_to_send(String _name, String _comm)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
   doc[sr_name_str] = _name;
   doc[sr_command_str] = _comm;
@@ -673,7 +679,7 @@ static void println(String _str)
   }
 }
 
-static void switch_relay(int8_t index)
+static void switch_local_relay(int8_t index)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -682,7 +688,7 @@ static void switch_relay(int8_t index)
     relayArray[index].relayLastState = get_relay_state(index) == sr_on_str;
     if (save_state_of_relay)
     {
-      saveConfigFile(mtRelay);
+      save_config_file(mtRelay);
     }
 
     print(relayArray[index].relayName);
@@ -785,9 +791,9 @@ static void handleGetConfig(String _msg)
   http_server->send(200, FPSTR(TEXT_JSON), _msg);
 }
 
-static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name, String _descr, int8_t _last)
+static StaticJsonDocument<RELAY_DATA_SIZE> get_relay_data_string(JsonObject &rel, String _name, String _descr, int8_t _last)
 {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<RELAY_DATA_SIZE> doc;
   if (_last >= 0)
   {
     rel[sr_last_state_str] = _last;
@@ -798,7 +804,7 @@ static StaticJsonDocument<256> getRelayDataString(JsonObject &rel, String _name,
   return (doc);
 }
 
-static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl)
+static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl)
 {
   doc[sr_module_str] = module_description;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
@@ -810,10 +816,10 @@ static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl)
     for (int8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
-      getRelayDataString(rel,
-                         relayArray[i].relayName,
-                         relayArray[i].relayDescription,
-                         (byte)relayArray[i].relayLastState);
+      get_relay_data_string(rel,
+                            relayArray[i].relayName,
+                            relayArray[i].relayDescription,
+                            (byte)relayArray[i].relayLastState);
     }
     break;
   case mtSwitch:
@@ -821,19 +827,19 @@ static void getConfigJsonDoc(StaticJsonDocument<2048> &doc, ModuleType _mdl)
     for (int8_t i = 0; i < switchCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
-      getRelayDataString(rel,
-                         switchArray[i].relayName,
-                         switchArray[i].relayDescription);
+      get_relay_data_string(rel,
+                            switchArray[i].relayName,
+                            switchArray[i].relayDescription);
     }
     break;
   }
 }
 
-static String getConfigString(ModuleType _mdl)
+static String get_config_json_string(ModuleType _mdl)
 {
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<CONFIG_SIZE> doc;
 
-  getConfigJsonDoc(doc, _mdl);
+  get_config_json_doc(doc, _mdl);
 
   String _res = "";
   serializeJson(doc, _res);
@@ -842,12 +848,12 @@ static String getConfigString(ModuleType _mdl)
 
 static void handleGetRelayConfig()
 {
-  handleGetConfig(getConfigString(mtRelay));
+  handleGetConfig(get_config_json_string(mtRelay));
 }
 
 static void handleGetSwitchConfig()
 {
-  handleGetConfig(getConfigString(mtSwitch));
+  handleGetConfig(get_config_json_string(mtSwitch));
 }
 
 static void getStringValue(String &_var, String _val)
@@ -866,7 +872,7 @@ static void handleSetConfig()
 
   String json = http_server->arg("plain");
 
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<CONFIG_SIZE> doc;
 
   DeserializationError error = deserializeJson(doc, json);
   if (error)
@@ -878,13 +884,13 @@ static void handleSetConfig()
   {
     if (doc[sr_for_str].as<String>() == sr_relay_str)
     {
-      loadSetting(mtRelay, doc);
-      saveConfigFile(mtRelay, doc);
+      load_setting(mtRelay, doc);
+      save_config_file(mtRelay, doc);
     }
     else if (doc[sr_for_str].as<String>() == sr_switch_str)
     {
-      loadSetting(mtSwitch, doc);
-      saveConfigFile(mtSwitch, doc);
+      load_setting(mtSwitch, doc);
+      save_config_file(mtSwitch, doc);
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
@@ -898,7 +904,7 @@ static void handleRelaySwitch()
 
     int8_t index = get_argument(json, sr_relay_str).toInt();
 
-    switch_relay(index);
+    switch_local_relay(index);
     http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
   }
   else
@@ -926,22 +932,24 @@ static void handleRemoteRelaySwitch()
 
 static void handleGetRelayState()
 {
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<CONFIG_SIZE> doc;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   for (int8_t i = 0; i < relayCount; i++)
   {
     JsonObject rel = relays.createNestedObject();
-    getRelayDataString(rel,
-                       relayArray[i].relayName,
-                       relayArray[i].relayDescription,
-                       (byte)relayArray[i].relayLastState);
+    bool state = get_relay_state(i) == sr_on_str;
+    get_relay_data_string(rel,
+                          relayArray[i].relayName,
+                          relayArray[i].relayDescription,
+                          (byte)state);
+    // (byte)relayArray[i].relayLastState);
   }
   String _res = "";
   serializeJson(doc, _res);
   http_server->send(200, FPSTR(TEXT_JSON), _res);
 }
 
-static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc)
+static bool load_setting(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc)
 {
   getStringValue(module_description, doc[sr_module_str].as<String>());
   int8_t x = doc[sr_relays_str].size();
@@ -974,7 +982,7 @@ static bool loadSetting(ModuleType _mdt, StaticJsonDocument<2048> &doc)
   return (true);
 }
 
-static String getConfigFileName(ModuleType _mdt)
+static String get_config_file_name(ModuleType _mdt)
 {
   switch (_mdt)
   {
@@ -990,24 +998,24 @@ static String getConfigFileName(ModuleType _mdt)
   }
 }
 
-static bool saveConfigFile(ModuleType _mdt)
+static bool save_config_file(ModuleType _mdt)
 {
-  StaticJsonDocument<2048> doc;
-  getConfigJsonDoc(doc, _mdt);
-  return (saveConfigFile(_mdt, doc));
+  StaticJsonDocument<CONFIG_SIZE> doc;
+  get_config_json_doc(doc, _mdt);
+  return (save_config_file(_mdt, doc));
 }
 
-static bool saveConfigFile(ModuleType _mdt, StaticJsonDocument<2048> &doc)
+static bool save_config_file(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc)
 {
-  String fileName = getConfigFileName(_mdt);
+  String fileName = get_config_file_name(_mdt);
 
   File configFile;
 
   // удалить существующий файл, иначе конфигурация будет добавлена ​​к файлу
-  if (file_system->remove(fileName))
+  file_system->remove(fileName);
 
-    // Открыть файл для записи
-    configFile = file_system->open(fileName, "w");
+  // Открыть файл для записи
+  configFile = file_system->open(fileName, "w");
 
   if (!configFile)
   {
@@ -1028,10 +1036,10 @@ static bool saveConfigFile(ModuleType _mdt, StaticJsonDocument<2048> &doc)
   return (true);
 }
 
-static bool loadConfigFile(ModuleType _mdt)
+static bool load_config_file(ModuleType _mdt)
 {
   File configFile;
-  String fileName = getConfigFileName(_mdt);
+  String fileName = get_config_file_name(_mdt);
 
   // находим и открываем для чтения файл конфигурации
   bool result = file_system->exists(fileName) &&
@@ -1041,19 +1049,19 @@ static bool loadConfigFile(ModuleType _mdt)
   if (!result)
   {
     println(F("Config file not found, default config used."));
-    saveConfigFile(_mdt);
+    save_config_file(_mdt);
     return (result);
   }
   // Проверяем размер файла, будем использовать файл размером меньше 1024 байта
   size_t size = configFile.size();
-  if (size > 2048)
+  if (size > CONFIG_SIZE)
   {
     println(F("WiFi configuration file size is too large."));
     configFile.close();
     return (false);
   }
 
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<CONFIG_SIZE> doc;
 
   DeserializationError error = deserializeJson(doc, configFile);
   configFile.close();
@@ -1067,7 +1075,7 @@ static bool loadConfigFile(ModuleType _mdt)
   else
   // Теперь можно получить значения из doc
   {
-    result = loadSetting(_mdt, doc);
+    result = load_setting(_mdt, doc);
   }
 
   return (result);
