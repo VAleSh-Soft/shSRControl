@@ -40,7 +40,7 @@ struct shSwitchData
 
 /**
  * @brief класс модуля WiFi-реле
- * 
+ *
  */
 class shRelayControl
 {
@@ -81,7 +81,6 @@ public:
    */
   void begin(WiFiUDP *_udp, uint16_t _local_port);
 
-#if defined(ARDUINO_ARCH_ESP32)
   /**
    * @brief подключение Web-интерфейса
    *
@@ -89,15 +88,9 @@ public:
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
    */
+#if defined(ARDUINO_ARCH_ESP32)
   void attachWebInterface(WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 #else
-  /**
-   * @brief подключение Web-интерфейса
-   *
-   * @param _server ссылка на экземпляр Web-сервера (ESP8266WebServer), с которым будет работать модуль
-   * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
-   */
   void attachWebInterface(ESP8266WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 #endif
 
@@ -108,22 +101,38 @@ public:
   void tick();
 
   /**
-   * @brief переключение состояния реле локальной кнопкой
-   * 
+   * @brief переключение состояния реле
+   *
    * @param index индекс реле в массиве
    */
   void switchRelay(int8_t index);
 
   /**
-   * @brief переключение состояния реле локальной кнопкой
-   * 
+   * @brief переключение состояния реле
+   *
    * @param _name сетевое имя реле
    */
   void switchRelay(String _name);
 
+/**
+ * @brief установить состояние реле
+ * 
+ * @param index индекс реле в массиве
+ * @param state новое состояние реле
+ */
+  void setRelayState(int8_t index, bool state);
+
+  /**
+   * @brief установить состояние реле
+   * 
+   * @param _name сетевое имя реле
+   * @param state новое состояние реле
+   */
+  void setRelayState(String _name, bool state);
+
   /**
    * @brief получение информации о текущем состоянии реле (включено/отключено)
-   * 
+   *
    * @param index  индекс реле в массиве
    * @return String "on" - включено; "off" - отключено
    */
@@ -131,7 +140,7 @@ public:
 
   /**
    * @brief получение информации о текущем состоянии реле (включено/отключено)
-   * 
+   *
    * @param _name сетевое имя реле
    * @return String  "on" - включено; "off" - отключено
    */
@@ -139,36 +148,36 @@ public:
 
   /**
    * @brief установка описания модуля
-   * 
+   *
    * @param _descr новое описание
    */
   void setModuleDescription(String _descr);
 
   /**
    * @brief получение текущего описания модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getModuleDescription();
 
   /**
    * @brief сохранение и восстановление последнего состояния реле при перезапуске модуля
-   * 
+   *
    * @param _state новое состояние опции
    */
   void setSaveStateOfRelay(bool _state);
 
   /**
    * @brief получение текущего состояния опции сохранения и восстановления последнего состояния реле
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool getSaveStateOfRelay();
 
   /**
    * @brief установка нового сетевого имени реле
-   * 
+   *
    * @param index индекс реле в массиве
    * @param _name новое сетевое имя
    */
@@ -176,15 +185,15 @@ public:
 
   /**
    * @brief получение текущего сетевого имени реле
-   * 
+   *
    * @param index индекс реле в массиве
-   * @return String 
+   * @return String
    */
   String getRelayName(int8_t index);
 
   /**
    * @brief установка нового описания реле
-   * 
+   *
    * @param index индекс реле в массиве
    * @param _descr новое описание
    */
@@ -192,39 +201,39 @@ public:
 
   /**
    * @brief получение текущего описания реле
-   * 
+   *
    * @param index индекс реле в массиве
-   * @return String 
+   * @return String
    */
   String getRelayDescription(int8_t index);
 
   /**
    * @brief установка нового имени файла для сохранения настроек
-   * 
+   *
    * @param _name новое имя файла
    */
   void setFileName(String _name);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getFileName();
 
   /**
    * @brief сохранение настроек в файл
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool saveConfige();
 
   /**
    * @brief считывание и загрузка сохраненных в файле настроек
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool loadConfig();
 };
@@ -233,7 +242,7 @@ public:
 
 /**
  * @brief класс модуля WiFi-выключателя
- * 
+ *
  */
 class shSwitchControl
 {
@@ -244,10 +253,10 @@ private:
   int8_t getRelayIndexByName(String &_res);
 
 public:
-/**
- * @brief конструктор
- * 
- */
+  /**
+   * @brief конструктор
+   *
+   */
   shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_count);
 
   /**
@@ -267,18 +276,17 @@ public:
 
   /**
    * @brief установка интервала проверки доступности связанных реле в сети в милисекундах; по умолчанию установлен интервал в 30 секунд
-   * 
+   *
    * @param _timer новое значение в милисекундах
    */
   void setCheckTimer(uint32_t _timer);
 
   /**
    * @brief получение размера интервала проверки доступности связанных реле в сети в милисекундах;
-   * 
-   * @return uint32_t 
+   *
+   * @return uint32_t
    */
   uint32_t getCheckTimer();
-
 
   /**
    * @brief инициализация модуля
@@ -290,7 +298,6 @@ public:
    */
   void begin(WiFiUDP *_udp, uint16_t _local_port);
 
-#if defined(ARDUINO_ARCH_ESP32)
   /**
    * @brief подключение Web-интерфейса
    *
@@ -298,15 +305,9 @@ public:
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
    */
+#if defined(ARDUINO_ARCH_ESP32)
   void attachWebInterface(WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 #else
-  /**
-   * @brief подключение Web-интерфейса
-   *
-   * @param _server ссылка на экземпляр Web-сервера (WebServer), с которым будет работать модуль
-   * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
-   */
   void attachWebInterface(ESP8266WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 #endif
 
@@ -318,41 +319,57 @@ public:
 
   /**
    * @brief переключение состояния удаленного реле
-   * 
+   *
    * @param index индекс реле в массиве
    */
   void switchRelay(int8_t index);
 
   /**
    * @brief переключение состояния удаленного реле
-   * 
+   *
    * @param _name сетевое имя удаленного реле
    */
   void switchRelay(String _name);
 
+/**
+ * @brief установить состояние удаленного реле
+ * 
+ * @param index индекс реле в массиве
+ * @param state новое состояние реле
+ */
+  void setRelayState(int8_t index, bool state);
+
+  /**
+   * @brief установить состояние удаленного реле
+   * 
+   * @param _name сетевое имя удаленного реле
+   * @param state новое состояние реле
+   */
+  void setRelayState(String _name, bool state);
+  
   /**
    * @brief поиск связанных реле в сети
-   * 
+   *
    */
   void findRelays();
 
   /**
    * @brief установка описания модуля
-   * 
+   *
    * @param _descr новое описание
    */
   void setModuleDescription(String _descr);
 
   /**
    * @brief получение текущего описания модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getModuleDescription();
 
   /**
    * @brief установка сетевого имени удаленного реле, которым будет управлять кнопка с индексом index в массиве
-   * 
+   *
    * @param index индекс реле в массиве
    * @param _name новое имя удаленного реле
    */
@@ -360,39 +377,39 @@ public:
 
   /**
    * @brief получение текущего имени удаленного реле, связанного с кнопкой
-   * 
+   *
    * @param index индекс реле в массиве
-   * @return String 
+   * @return String
    */
   String getRelayName(int8_t index);
 
   /**
    * @brief установка нового имени файла для сохранения настроек
-   * 
+   *
    * @param _name новое имя файла
    */
   void setFileName(String _name);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getFileName();
 
   /**
    * @brief сохранение настроек в файл
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool saveConfige();
 
   /**
    * @brief считывание и загрузка сохраненных в файле настроек
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool loadConfig();
 };

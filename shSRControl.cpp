@@ -21,6 +21,8 @@ static const String sr_on_str = "on";
 static const String sr_off_str = "off";
 static const String sr_relay_str = "relay";
 static const String sr_switch_str = "switch";
+static const String sr_set_on_str = "set_on";
+static const String sr_set_off_str = "set_off";
 static const String sr_respond_str = "respond";
 static const String sr_any_str = "any_relay";
 
@@ -79,9 +81,9 @@ static uint16_t localPort = 0;
 
 // ===================================================
 
-static IPAddress get_broadcast();
+static IPAddress get_broadcast_address();
 static bool get_value_of_argument(String &_res, String _arg, String &_str);
-static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t bufSize);
+static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize);
 static String get_argument(String _res, String _arg);
 static String get_json_string_to_send(String _name, String _comm);
 static String get_json_string_to_send(String _name,
@@ -93,9 +95,12 @@ static void print(String _str);
 static void println(String _str);
 
 static void switch_local_relay(int8_t index);
+static void set_local_relay_state(int8_t index, bool state);
 static String get_relay_state(int8_t index);
 
 static void switch_remote_relay(int8_t index);
+static void set_remote_relay_state(int8_t index, bool state);
+static void send_command_for_relay(int8_t index, String command);
 
 static void find_remote_relays();
 
@@ -111,7 +116,10 @@ static void handleGetConfig(String _msg);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 
-static StaticJsonDocument<RELAY_DATA_SIZE> get_relay_data_string(JsonObject &rel, String _name, String _descr, int8_t _last = -1);
+static void get_relay_data_json(JsonObject &rel,
+                                String _name,
+                                String _descr,
+                                int8_t _last = -1);
 static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl);
 static String get_config_json_string(ModuleType _mdl);
 
@@ -201,7 +209,7 @@ void shRelayControl::tick()
     if (relayArray[i].relayButton != NULL &&
         relayArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
-      switchRelay(i);
+      switch_local_relay(i);
     }
   }
 
@@ -233,7 +241,8 @@ void shRelayControl::receiveUdpPacket(int _size)
   udp->flush();
 
   String _resp = String(_str);
-  if (get_argument(_resp, sr_command_str) == sr_respond_str)
+  String comm = get_argument(_resp, sr_command_str);
+  if (comm == sr_respond_str)
   {
     String r_name = get_argument(_resp, sr_name_str);
     if (r_name == sr_any_str)
@@ -251,15 +260,21 @@ void shRelayControl::receiveUdpPacket(int _size)
   else
   {
     int8_t relay_index = getRelayIndexByName(_resp);
-    if ((relay_index >= 0) &&
-        (get_argument(_resp, sr_command_str) == sr_switch_str))
+    if (relay_index >= 0)
     {
-      switchRelay(relay_index);
+      if (comm == sr_switch_str)
+      {
+        switch_local_relay(relay_index);
+      }
+      else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
+      {
+        set_local_relay_state(relay_index, (comm == sr_set_on_str));
+      }
 
       String s = get_json_string_to_send(relayArray[relay_index].relayName,
                                          relayArray[relay_index].relayDescription,
                                          getRelayState(relay_index),
-                                         sr_command_str);
+                                         comm);
       send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
     }
   }
@@ -292,6 +307,16 @@ void shRelayControl::switchRelay(int8_t index)
 void shRelayControl::switchRelay(String _name)
 {
   switch_local_relay(getRelayIndexByName(_name));
+}
+
+void shRelayControl::setRelayState(int8_t index, bool state)
+{
+  set_local_relay_state(index, state);
+}
+
+void shRelayControl::setRelayState(String _name, bool state)
+{
+  set_local_relay_state(getRelayIndexByName(_name), state);
 }
 
 String shRelayControl::getRelayState(int8_t index)
@@ -441,7 +466,7 @@ void shSwitchControl::tick()
     if (switchArray[i].relayButton != NULL &&
         switchArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
-      switchRelay(i);
+      switch_remote_relay(i);
     }
   }
 
@@ -466,7 +491,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
 
   String _resp = String(_str);
 #if defined(ARDUINO_ARCH_ESP8266)
-  if ((udp->destinationIP() != get_broadcast()))
+  if ((udp->destinationIP() != get_broadcast_address()))
   {
 #endif
     int8_t relay_index = getRelayIndexByName(_resp);
@@ -482,7 +507,9 @@ void shSwitchControl::receiveUdpPacket(int _size)
         print(F(" found, IP address: "));
         println(switchArray[relay_index].relayAddress.toString());
       }
-      else if (arg_for == sr_command_str)
+      else if (arg_for == sr_switch_str ||
+               arg_for == sr_set_on_str ||
+               arg_for == sr_set_off_str)
       {
         print(switchArray[relay_index].relayName);
         print(F(" response - "));
@@ -526,6 +553,16 @@ void shSwitchControl::switchRelay(int8_t index)
 void shSwitchControl::switchRelay(String _name)
 {
   switch_remote_relay(getRelayIndexByName(_name));
+}
+
+void shSwitchControl::setRelayState(int8_t index, bool state)
+{
+  set_remote_relay_state(index, state);
+}
+
+void shSwitchControl::setRelayState(String _name, bool state)
+{
+  set_remote_relay_state(getRelayIndexByName(_name), state);
 }
 
 void shSwitchControl::findRelays()
@@ -583,7 +620,7 @@ bool shSwitchControl::loadConfig()
 
 // ===================================================
 
-static IPAddress get_broadcast()
+static IPAddress get_broadcast_address()
 {
   return ((uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask()));
 }
@@ -612,16 +649,24 @@ static bool get_value_of_argument(String &_res, String _arg, String &_str)
   return result;
 }
 
-static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t bufSize)
+static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize)
 {
-  udp->beginPacket(address, localPort);
+  bool result = udp->beginPacket(address, localPort);
 
-  uint8_t *_buf = new uint8_t[bufSize];
-  memcpy(_buf, buf, bufSize);
-  udp->write(_buf, bufSize);
-  delete[] _buf;
+  if (result)
+  {
+    uint8_t *_buf = new uint8_t[bufSize];
+    result = (_buf != NULL);
+    if (result)
+    {
+      memcpy(_buf, buf, bufSize);
+      udp->write(_buf, bufSize);
+      delete[] _buf;
 
-  bool result = udp->endPacket() == 1;
+      result = udp->endPacket() == 1;
+    }
+  }
+
   if (!result)
   {
     print(F("Error sending UDP packet for IP "));
@@ -629,6 +674,7 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, uint8_t b
     print(F(", remote port: "));
     println((String)localPort);
   }
+
   return (result);
 }
 
@@ -687,7 +733,18 @@ static void switch_local_relay(int8_t index)
 {
   if ((index >= 0) && (index < relayCount))
   {
-    uint8_t state = !digitalRead(relayArray[index].relayPin);
+    set_local_relay_state(index, !(get_relay_state(index) == sr_on_str));
+  }
+}
+
+static void set_local_relay_state(int8_t index, bool state)
+{
+  if ((index >= 0) && (index < relayCount))
+  {
+    if (!relayArray[index].relayControlLevel)
+    {
+      state = !state;
+    }
     digitalWrite(relayArray[index].relayPin, state);
     relayArray[index].relayLastState = get_relay_state(index) == sr_on_str;
     if (save_state_of_relay)
@@ -719,6 +776,17 @@ static String get_relay_state(int8_t index)
 
 static void switch_remote_relay(int8_t index)
 {
+  send_command_for_relay(index, sr_switch_str);
+}
+
+static void set_remote_relay_state(int8_t index, bool state)
+{
+  String _str = (state) ? sr_set_on_str : sr_set_off_str;
+  send_command_for_relay(index, _str);
+}
+
+static void send_command_for_relay(int8_t index, String command)
+{
   if ((index >= 0) &&
       (index < switchCount) &&
       (switchArray[index].relayName != emptyString))
@@ -726,12 +794,14 @@ static void switch_remote_relay(int8_t index)
     if (switchArray[index].relayFound)
     {
       String s = get_json_string_to_send(switchArray[index].relayName,
-                                         sr_switch_str);
-      println(F("Sending a request to switch the relay"));
+                                         command);
+      println(F("Sending a command to remote relay"));
       print(F("Relay name: "));
       print(switchArray[index].relayName);
       print(F("; IP: "));
-      println(switchArray[index].relayAddress.toString());
+      print(switchArray[index].relayAddress.toString());
+      print(F("; command: "));
+      println(command);
       switchArray[index].relayFound = false;
       send_udp_packet(switchArray[index].relayAddress, s.c_str(), s.length());
     }
@@ -753,7 +823,7 @@ static void find_remote_relays()
     switchArray[i].relayFound = false;
   }
 
-  IPAddress broadcastAddress = get_broadcast();
+  IPAddress broadcastAddress = get_broadcast_address();
 
   String s = get_json_string_to_send(sr_any_str, sr_respond_str);
   println(F("Sending a request to check IP addresses of relays"));
@@ -795,17 +865,14 @@ static void handleGetConfig(String _msg)
   http_server->send(200, FPSTR(TEXT_JSON), _msg);
 }
 
-static StaticJsonDocument<RELAY_DATA_SIZE> get_relay_data_string(JsonObject &rel, String _name, String _descr, int8_t _last)
+static void get_relay_data_json(JsonObject &rel, String _name, String _descr, int8_t _last)
 {
-  StaticJsonDocument<RELAY_DATA_SIZE> doc;
   if (_last >= 0)
   {
     rel[sr_last_state_str] = _last;
   }
   rel[sr_name_str] = _name;
   rel[sr_descr_str] = _descr;
-
-  return (doc);
 }
 
 static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl)
@@ -820,10 +887,10 @@ static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType
     for (int8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
-      get_relay_data_string(rel,
-                            relayArray[i].relayName,
-                            relayArray[i].relayDescription,
-                            (byte)relayArray[i].relayLastState);
+      get_relay_data_json(rel,
+                          relayArray[i].relayName,
+                          relayArray[i].relayDescription,
+                          (byte)relayArray[i].relayLastState);
     }
     break;
   case mtSwitch:
@@ -831,9 +898,9 @@ static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType
     for (int8_t i = 0; i < switchCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
-      get_relay_data_string(rel,
-                            switchArray[i].relayName,
-                            switchArray[i].relayDescription);
+      get_relay_data_json(rel,
+                          switchArray[i].relayName,
+                          switchArray[i].relayDescription);
     }
     break;
   }
@@ -936,20 +1003,21 @@ static void handleRemoteRelaySwitch()
 
 static void handleGetRelayState()
 {
+  String _res = "";
+
   StaticJsonDocument<CONFIG_SIZE> doc;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   for (int8_t i = 0; i < relayCount; i++)
   {
     JsonObject rel = relays.createNestedObject();
     bool state = get_relay_state(i) == sr_on_str;
-    get_relay_data_string(rel,
-                          relayArray[i].relayName,
-                          relayArray[i].relayDescription,
-                          (byte)state);
-    // (byte)relayArray[i].relayLastState);
+    get_relay_data_json(rel,
+                        relayArray[i].relayName,
+                        relayArray[i].relayDescription,
+                        (byte)state);
   }
-  String _res = "";
   serializeJson(doc, _res);
+
   http_server->send(200, FPSTR(TEXT_JSON), _res);
 }
 
