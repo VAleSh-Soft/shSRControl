@@ -67,8 +67,10 @@ static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
 
 static String module_description = "";
-static bool logOn = true;
 static bool save_state_of_relay = false;
+
+static HardwareSerial *serial = NULL;
+static bool logOnState = true;
 
 #if defined(ARDUINO_ARCH_ESP32)
 static WebServer *http_server = NULL;
@@ -144,6 +146,11 @@ shRelayControl::shRelayControl(shRelayData *_relay_array, uint8_t _relay_count)
   relayArray = _relay_array;
   relayCount = _relay_count;
 
+  if (&Serial != NULL)
+  {
+    serial = &Serial;
+  }
+
   for (uint8_t i = 0; i < relayCount; i++)
   {
     digitalWrite(relayArray[i].relayPin, !relayArray[i].relayControlLevel);
@@ -151,9 +158,13 @@ shRelayControl::shRelayControl(shRelayData *_relay_array, uint8_t _relay_count)
   }
 }
 
-void shRelayControl::setLogOnState(bool _on) { logOn = _on; }
+void shRelayControl::setLogOnState(bool _on, HardwareSerial *_serial)
+{
+  logOnState = _on;
+  serial = (logOnState) ? _serial : NULL;
+}
 
-bool shRelayControl::getLogOnState() { return (logOn); }
+bool shRelayControl::getLogOnState() { return (logOnState); }
 
 void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port)
 {
@@ -412,11 +423,20 @@ shSwitchControl::shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_co
 {
   switchCount = _switch_count;
   switchArray = _switch_array;
+
+  if (&Serial != NULL)
+  {
+    serial = &Serial;
+  }
 }
 
-void shSwitchControl::setLogOnState(bool _on) { logOn = _on; }
+void shSwitchControl::setLogOnState(bool _on, HardwareSerial *_serial)
+{
+  logOnState = _on;
+  serial = (logOnState) ? _serial : NULL;
+}
 
-bool shSwitchControl::getLogOnState() { return (logOn); }
+bool shSwitchControl::getLogOnState() { return (logOnState); }
 
 void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
 
@@ -622,7 +642,19 @@ bool shSwitchControl::loadConfig()
 
 static IPAddress get_broadcast_address()
 {
-  return ((uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask()));
+  IPAddress result{0, 0, 0, 0};
+  if (WiFi.isConnected())
+  {
+    result = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
+  }
+#if defined(ARDUINO_ARCH_ESP32)
+  else
+  {
+    result = WiFi.softAPBroadcastIP();
+  }
+#endif
+
+  return (result);
 }
 
 static bool get_value_of_argument(String &_res, String _arg, String &_str)
@@ -715,17 +747,17 @@ static String get_json_string_to_send(String _name, String _comm)
 
 static void print(String _str)
 {
-  if (logOn && Serial)
+  if (logOnState && serial)
   {
-    Serial.print(_str);
+    serial->print(_str);
   }
 }
 
 static void println(String _str)
 {
-  if (logOn && Serial)
+  if (logOnState && serial)
   {
-    Serial.println(_str);
+    serial->println(_str);
   }
 }
 
@@ -787,32 +819,39 @@ static void set_remote_relay_state(int8_t index, bool state)
 
 static void send_command_for_relay(int8_t index, String command)
 {
-  if ((index >= 0) &&
-      (index < switchCount) &&
-      (switchArray[index].relayName != emptyString))
+  if (WiFi.isConnected())
   {
-    if (switchArray[index].relayFound)
+    if ((index >= 0) &&
+        (index < switchCount) &&
+        (switchArray[index].relayName != emptyString))
     {
-      String s = get_json_string_to_send(switchArray[index].relayName,
-                                         command);
-      println(F("Sending a command to remote relay"));
-      print(F("Relay name: "));
-      print(switchArray[index].relayName);
-      print(F("; IP: "));
-      print(switchArray[index].relayAddress.toString());
-      print(F("; command: "));
-      println(command);
-      switchArray[index].relayFound = false;
-      send_udp_packet(switchArray[index].relayAddress, s.c_str(), s.length());
+      if (switchArray[index].relayFound)
+      {
+        String s = get_json_string_to_send(switchArray[index].relayName,
+                                           command);
+        println(F("Sending a command to remote relay"));
+        print(F("Relay name: "));
+        print(switchArray[index].relayName);
+        print(F("; IP: "));
+        print(switchArray[index].relayAddress.toString());
+        print(F("; command: "));
+        println(command);
+        switchArray[index].relayFound = false;
+        send_udp_packet(switchArray[index].relayAddress, s.c_str(), s.length());
+      }
+      else
+      {
+        print(F("Relay "));
+        print(switchArray[index].relayName);
+        println(F(" not found!"));
+        // TODO: подумать над звуковой индикацией ошибки
+        find_remote_relays();
+      }
     }
-    else
-    {
-      print(F("Relay "));
-      print(switchArray[index].relayName);
-      println(F(" not found!"));
-      // TODO: подумать над звуковой индикацией ошибки
-      find_remote_relays();
-    }
+  }
+  else
+  {
+    println(F("Failed to send command to remote relay, connection lost"));
   }
 }
 

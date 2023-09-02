@@ -61,7 +61,7 @@ public:
    *
    * @param _on
    */
-  void setLogOnState(bool _on);
+  void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial
@@ -264,7 +264,7 @@ public:
    *
    * @param _on
    */
-  void setLogOnState(bool _on);
+  void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial
