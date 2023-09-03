@@ -122,7 +122,7 @@ static void get_relay_data_json(JsonObject &rel,
                                 String _name,
                                 String _descr,
                                 int8_t _last = -1);
-static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl);
+static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl);
 static String get_config_json_string(ModuleType _mdl);
 
 static void handleSetConfig();
@@ -132,11 +132,11 @@ static void handleRemoteRelaySwitch();
 static void handleGetRelayState();
 
 // ===================================================
-static bool load_setting(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc);
+static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc);
 
 static String get_config_file_name(ModuleType _mdt);
 static bool save_config_file(ModuleType _mdt);
-static bool save_config_file(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc);
+static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc);
 static bool load_config_file(ModuleType _mdt);
 
 // ==== shRelayControl class ===========================
@@ -914,7 +914,7 @@ static void get_relay_data_json(JsonObject &rel, String _name, String _descr, in
   rel[sr_descr_str] = _descr;
 }
 
-static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType _mdl)
+static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
 {
   doc[sr_module_str] = module_description;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
@@ -947,7 +947,7 @@ static void get_config_json_doc(StaticJsonDocument<CONFIG_SIZE> &doc, ModuleType
 
 static String get_config_json_string(ModuleType _mdl)
 {
-  StaticJsonDocument<CONFIG_SIZE> doc;
+  DynamicJsonDocument doc(CONFIG_SIZE);
 
   get_config_json_doc(doc, _mdl);
 
@@ -982,7 +982,7 @@ static void handleSetConfig()
 
   String json = http_server->arg("plain");
 
-  StaticJsonDocument<CONFIG_SIZE> doc;
+  DynamicJsonDocument doc(CONFIG_SIZE);
 
   DeserializationError error = deserializeJson(doc, json);
   if (error)
@@ -1044,7 +1044,7 @@ static void handleGetRelayState()
 {
   String _res = "";
 
-  StaticJsonDocument<CONFIG_SIZE> doc;
+  DynamicJsonDocument doc(CONFIG_SIZE);
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   for (int8_t i = 0; i < relayCount; i++)
   {
@@ -1060,7 +1060,7 @@ static void handleGetRelayState()
   http_server->send(200, FPSTR(TEXT_JSON), _res);
 }
 
-static bool load_setting(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc)
+static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
 {
   getStringValue(module_description, doc[sr_module_str].as<String>());
   int8_t x = doc[sr_relays_str].size();
@@ -1111,12 +1111,12 @@ static String get_config_file_name(ModuleType _mdt)
 
 static bool save_config_file(ModuleType _mdt)
 {
-  StaticJsonDocument<CONFIG_SIZE> doc;
+  DynamicJsonDocument doc(CONFIG_SIZE);
   get_config_json_doc(doc, _mdt);
   return (save_config_file(_mdt, doc));
 }
 
-static bool save_config_file(ModuleType _mdt, StaticJsonDocument<CONFIG_SIZE> &doc)
+static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
 {
   if (!file_system)
   {
@@ -1178,7 +1178,7 @@ static bool load_config_file(ModuleType _mdt)
     return (false);
   }
 
-  StaticJsonDocument<CONFIG_SIZE> doc;
+  DynamicJsonDocument doc(CONFIG_SIZE);
 
   DeserializationError error = deserializeJson(doc, configFile);
   configFile.close();
