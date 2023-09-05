@@ -17,6 +17,8 @@ shSwitchControl	KEYWORD1
 
 setLogOnState	KEYWORD2
 getLogOnState	KEYWORD2
+setErrorBuzzerState	KEYWORD2
+getErrorBuzzerState	KEYWORD2
 begin	KEYWORD2
 attachWebInterface	KEYWORD2
 tick	KEYWORD2

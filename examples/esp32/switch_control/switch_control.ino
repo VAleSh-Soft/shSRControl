@@ -35,6 +35,7 @@ WiFiUDP udp;
 #endif
 
 const int8_t ledPin = 4;
+const int8_t buzzerPin = 17;
 
 // работаем с двумя кнопками на модуле выключателя
 shButton btn1(16);
@@ -71,6 +72,8 @@ void setup()
   {
     switch_control.attachWebInterface(&HTTP, &FILESYSTEM);
   }
+  // подключаем звуковой сигнализатор об ошибке отправки команды удаленному реле
+  switch_control.setErrorBuzzerState(true, buzzerPin);
 
   pinMode(ledPin, OUTPUT);
   Serial.print(F("Connecting to "));

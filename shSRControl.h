@@ -12,6 +12,7 @@
 #endif
 #include <WiFiUdp.h>
 #include <FS.h>
+#include <Ticker.h>
 #include <shButton.h>
 
 // описание свойств реле
@@ -114,17 +115,17 @@ public:
    */
   void switchRelay(String _name);
 
-/**
- * @brief установить состояние реле
- * 
- * @param index индекс реле в массиве
- * @param state новое состояние реле
- */
+  /**
+   * @brief установить состояние реле
+   *
+   * @param index индекс реле в массиве
+   * @param state новое состояние реле
+   */
   void setRelayState(int8_t index, bool state);
 
   /**
    * @brief установить состояние реле
-   * 
+   *
    * @param _name сетевое имя реле
    * @param state новое состояние реле
    */
@@ -274,6 +275,22 @@ public:
    */
   bool getLogOnState();
 
+/**
+ * @brief включить/выключить подачу звукового сигнала об ошибке отправки команды удаленному реле
+ * 
+ * @param _state новое состояние опции
+ * @param _pin пин, к которому подключен буззер
+ */
+  void setErrorBuzzerState(bool _state, int8_t _pin = -1);
+
+  /**
+   * @brief получить состояние опции подачи звукового сигнала об ошибке отправки команды удаленному реле
+   * 
+   * @return true 
+   * @return false 
+   */
+  bool getErrorBuzzerState();
+
   /**
    * @brief установка интервала проверки доступности связанных реле в сети в милисекундах; по умолчанию установлен интервал в 30 секунд
    *
@@ -331,22 +348,22 @@ public:
    */
   void switchRelay(String _name);
 
-/**
- * @brief установить состояние удаленного реле
- * 
- * @param index индекс реле в массиве
- * @param state новое состояние реле
- */
+  /**
+   * @brief установить состояние удаленного реле
+   *
+   * @param index индекс реле в массиве
+   * @param state новое состояние реле
+   */
   void setRelayState(int8_t index, bool state);
 
   /**
    * @brief установить состояние удаленного реле
-   * 
+   *
    * @param _name сетевое имя удаленного реле
    * @param state новое состояние реле
    */
   void setRelayState(String _name, bool state);
-  
+
   /**
    * @brief поиск связанных реле в сети
    *
@@ -412,4 +429,27 @@ public:
    * @return false
    */
   bool loadConfig();
+};
+
+// ==== ErrorBuzzer class ============================
+
+class ErrorBuzzer
+{
+private:
+  Ticker buzzer;
+  int8_t pin = -1;
+  uint8_t bip_count = 0;
+  uint16_t freq = 500;
+  uint32_t dur = 50;
+  bool state = false;
+
+public:
+  ErrorBuzzer();
+
+  void setState(bool _state, int8_t _pin = -1);
+  bool getState();
+  void startBuzzer(uint8_t _num);
+  void stopBuzzer();
+  void bip();
+  uint8_t decBipCount();
 };

@@ -81,6 +81,8 @@ static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
 
+static ErrorBuzzer err;
+
 // ===================================================
 
 static IPAddress get_broadcast_address();
@@ -437,6 +439,13 @@ void shSwitchControl::setLogOnState(bool _on, HardwareSerial *_serial)
 }
 
 bool shSwitchControl::getLogOnState() { return (logOnState); }
+
+void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
+{
+  err.setState(_state, _pin);
+}
+
+bool shSwitchControl::getErrorBuzzerState() { return (err.getState()); }
 
 void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
 
@@ -841,16 +850,17 @@ static void send_command_for_relay(int8_t index, String command)
       }
       else
       {
+        err.startBuzzer(2);
         print(F("Relay "));
         print(switchArray[index].relayName);
         println(F(" not found!"));
-        // TODO: подумать над звуковой индикацией ошибки
         find_remote_relays();
       }
     }
   }
   else
   {
+    err.startBuzzer(3);
     println(F("Failed to send command to remote relay, connection lost"));
   }
 }
@@ -1196,4 +1206,61 @@ static bool load_config_file(ModuleType _mdt)
   }
 
   return (result);
+}
+
+// ==== ErrorBuzzer class ============================
+
+void buzzerTick()
+{
+  err.bip();
+  if (err.decBipCount() == 0)
+  {
+    err.stopBuzzer();
+  }
+}
+
+ErrorBuzzer::ErrorBuzzer() {}
+
+void ErrorBuzzer::setState(bool _state, int8_t _pin)
+{
+  pin = _pin;
+  state = (pin >= 0) ? _state : false;
+}
+
+bool ErrorBuzzer::getState()
+{
+  return (state);
+}
+
+void ErrorBuzzer::startBuzzer(uint8_t _num)
+{
+  buzzer.detach();
+  if (state && pin >= 0)
+  {
+    bip_count = _num;
+    buzzer.attach_ms(dur * 2, buzzerTick);
+    buzzerTick();
+  }
+}
+
+void ErrorBuzzer::stopBuzzer()
+{
+  buzzer.detach();
+}
+
+void ErrorBuzzer::bip()
+{
+  if (state && pin >= 0)
+  {
+    tone(pin, freq, dur);
+  }
+  else
+  {
+    stopBuzzer();
+  }
+}
+
+uint8_t ErrorBuzzer::decBipCount()
+{
+  return (--bip_count);
 }
