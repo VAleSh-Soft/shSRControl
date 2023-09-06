@@ -656,12 +656,15 @@ static IPAddress get_broadcast_address()
   {
     result = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
   }
-#if defined(ARDUINO_ARCH_ESP32)
   else
   {
+#if defined(ARDUINO_ARCH_ESP32)
     result = WiFi.softAPBroadcastIP();
-  }
+#else
+    // предполагаем, что маска сети у точки доступа 255.255.255.0
+    result = (uint32_t)WiFi.softAPIP() | ~((uint32_t)IPAddress(255, 255, 255, 0));
 #endif
+  }
 
   return (result);
 }
