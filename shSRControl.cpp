@@ -1109,13 +1109,10 @@ static String get_config_file_name(ModuleType _mdt)
   {
   case mtRelay:
     return (relayFileConfigName);
-    break;
   case mtSwitch:
     return (switchFileConfigName);
-    break;
   default:
     return ("");
-    break;
   }
 }
 
@@ -1135,6 +1132,9 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
 
   String fileName = get_config_file_name(_mdt);
 
+  print(F("Save settings to file "));
+  println(fileName);
+
   File configFile;
 
   // удалить существующий файл, иначе конфигурация будет добавлена ​​к файлу
@@ -1152,20 +1152,27 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
 
   // сериализовать JSON-файл
   bool result = serializeJson(doc, configFile);
-  if (!result)
+  if (result)
+  {
+    println(F("OK"));
+  }
+  else
   {
     print(F("Failed to write file "));
     println(fileName);
   }
 
   configFile.close();
-  return (true);
+  return (result);
 }
 
 static bool load_config_file(ModuleType _mdt)
 {
   File configFile;
   String fileName = get_config_file_name(_mdt);
+
+  print(F("Load settings from file "));
+  println(fileName);
 
   // находим и открываем для чтения файл конфигурации
   bool result = file_system &&
@@ -1203,6 +1210,10 @@ static bool load_config_file(ModuleType _mdt)
   // Теперь можно получить значения из doc
   {
     result = load_setting(_mdt, doc);
+  }
+  if (result)
+  {
+    println(F("OK"));
   }
 
   return (result);
