@@ -25,6 +25,7 @@ tick	KEYWORD2
 switchRelay	KEYWORD2
 setRelayState	KEYWORD2
 getRelayState	KEYWORD2
+setStateForAll	KEYWORD2
 setModuleDescription	KEYWORD2
 getModuleDescription	KEYWORD2
 setSaveStateOfRelay	KEYWORD2

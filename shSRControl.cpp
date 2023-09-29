@@ -14,7 +14,7 @@ static const String sr_module_str = "module";
 static const String sr_last_state_str = "last";
 static const String sr_save_state_str = "save_state";
 
-// ==== значения параметров в запросах
+// ==== значения параметров в запросах ===============
 static const String sr_ok_str = "ok";
 static const String sr_no_str = "no";
 static const String sr_on_str = "on";
@@ -104,6 +104,7 @@ static String get_relay_state(int8_t index);
 
 static void switch_remote_relay(int8_t index);
 static void set_remote_relay_state(int8_t index, bool state);
+static void set_all_remote_relay_state(bool state);
 static void send_command_for_relay(int8_t index, String command);
 
 static void find_remote_relays();
@@ -246,6 +247,24 @@ void shRelayControl::respondToRelayCheck(int8_t index)
   }
 }
 
+void set_state(int8_t relay_index, String comm)
+{
+  if (comm == sr_switch_str)
+  {
+    switch_local_relay(relay_index);
+  }
+  else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
+  {
+    set_local_relay_state(relay_index, (comm == sr_set_on_str));
+  }
+
+  String s = get_json_string_to_send(relayArray[relay_index].relayName,
+                                     relayArray[relay_index].relayDescription,
+                                     get_relay_state(relay_index),
+                                     comm);
+  send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+}
+
 void shRelayControl::receiveUdpPacket(int _size)
 {
   char _str[_size + 1] = {0};
@@ -255,9 +274,9 @@ void shRelayControl::receiveUdpPacket(int _size)
 
   String _resp = String(_str);
   String comm = get_argument(_resp, sr_command_str);
+  String r_name = get_argument(_resp, sr_name_str);
   if (comm == sr_respond_str)
   {
-    String r_name = get_argument(_resp, sr_name_str);
     if (r_name == sr_any_str)
     {
       for (uint8_t i = 0; i < relayCount; i++)
@@ -270,26 +289,30 @@ void shRelayControl::receiveUdpPacket(int _size)
       respondToRelayCheck(getRelayIndexByName(r_name));
     }
   }
+  else if ((comm == sr_switch_str) ||
+           (comm == sr_set_on_str) ||
+           (comm == sr_set_off_str))
+  {
+    if (r_name == sr_any_str)
+    {
+      for (uint8_t i = 0; i < relayCount; i++)
+      {
+        set_state(i, comm);
+      }
+    }
+    else
+    {
+      set_state(getRelayIndexByName(_resp), comm);
+    }
+  }
   else
   {
-    int8_t relay_index = getRelayIndexByName(_resp);
-    if (relay_index >= 0)
-    {
-      if (comm == sr_switch_str)
-      {
-        switch_local_relay(relay_index);
-      }
-      else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
-      {
-        set_local_relay_state(relay_index, (comm == sr_set_on_str));
-      }
-
-      String s = get_json_string_to_send(relayArray[relay_index].relayName,
-                                         relayArray[relay_index].relayDescription,
-                                         getRelayState(relay_index),
-                                         comm);
-      send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
-    }
+    // ответ о неизвестной команде
+    String s = get_json_string_to_send(WiFi.localIP().toString(),
+                                       module_description,
+                                       F("unknown command"),
+                                       comm);
+    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
   }
 }
 
@@ -545,6 +568,16 @@ void shSwitchControl::receiveUdpPacket(int _size)
         println(get_argument(_resp, sr_response_str));
       }
     }
+    else
+    {
+      // ответ на случай, если имя ответившего реле модулю неизвестно
+      print(F("Module "));
+      print(get_argument(_resp, sr_name_str));
+      print(F(", "));
+      print(get_argument(_resp, sr_descr_str));
+      print(F(" response - "));
+      println(get_argument(_resp, sr_response_str));
+    }
 #if defined(ARDUINO_ARCH_ESP8266)
   }
   else
@@ -592,6 +625,21 @@ void shSwitchControl::setRelayState(int8_t index, bool state)
 void shSwitchControl::setRelayState(String _name, bool state)
 {
   set_remote_relay_state(getRelayIndexByName(_name), state);
+}
+
+void shSwitchControl::setStateForAll(bool state, bool _self)
+{
+  if (_self)
+  {
+    for (uint8_t i = 0; i < switchCount; i++)
+    {
+      set_remote_relay_state(i, state);
+    }
+  }
+  else
+  {
+    set_all_remote_relay_state(state);
+  }
 }
 
 void shSwitchControl::findRelays()
@@ -827,6 +875,27 @@ static void set_remote_relay_state(int8_t index, bool state)
 {
   String _str = (state) ? sr_set_on_str : sr_set_off_str;
   send_command_for_relay(index, _str);
+}
+
+static void set_all_remote_relay_state(bool state)
+{
+  if (WiFi.isConnected())
+  {
+    IPAddress broadcastAddress = get_broadcast_address();
+
+    String st = (state) ? sr_set_on_str : sr_set_off_str;
+    String s = get_json_string_to_send(sr_any_str, st);
+    print(F("Sending a request to set the state for all remote relays: "));
+    println(st);
+    print(F("Broadcast address: "));
+    println(broadcastAddress.toString());
+    send_udp_packet(broadcastAddress, s.c_str(), s.length());
+  }
+  else
+  {
+    err.startBuzzer(3);
+    println(F("Failed to send command to remote relay, connection lost"));
+  }
 }
 
 static void send_command_for_relay(int8_t index, String command)

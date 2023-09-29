@@ -119,7 +119,7 @@ public:
    * @brief установить состояние реле
    *
    * @param index индекс реле в массиве
-   * @param state новое состояние реле
+   * @param state новое состояние реле; true - включено, иначе выключено;
    */
   void setRelayState(int8_t index, bool state);
 
@@ -127,7 +127,7 @@ public:
    * @brief установить состояние реле
    *
    * @param _name сетевое имя реле
-   * @param state новое состояние реле
+   * @param state новое состояние реле; true - включено, иначе выключено;
    */
   void setRelayState(String _name, bool state);
 
@@ -275,19 +275,19 @@ public:
    */
   bool getLogOnState();
 
-/**
- * @brief включить/выключить подачу звукового сигнала об ошибке отправки команды удаленному реле
- * 
- * @param _state новое состояние опции
- * @param _pin пин, к которому подключен буззер
- */
+  /**
+   * @brief включить/выключить подачу звукового сигнала об ошибке отправки команды удаленному реле
+   *
+   * @param _state новое состояние опции
+   * @param _pin пин, к которому подключен буззер
+   */
   void setErrorBuzzerState(bool _state, int8_t _pin = -1);
 
   /**
    * @brief получить состояние опции подачи звукового сигнала об ошибке отправки команды удаленному реле
-   * 
-   * @return true 
-   * @return false 
+   *
+   * @return true
+   * @return false
    */
   bool getErrorBuzzerState();
 
@@ -352,7 +352,7 @@ public:
    * @brief установить состояние удаленного реле
    *
    * @param index индекс реле в массиве
-   * @param state новое состояние реле
+   * @param state новое состояние реле; true - включено, иначе выключено;
    */
   void setRelayState(int8_t index, bool state);
 
@@ -360,9 +360,17 @@ public:
    * @brief установить состояние удаленного реле
    *
    * @param _name сетевое имя удаленного реле
-   * @param state новое состояние реле
+   * @param state новое состояние реле; true - включено, иначе выключено;
    */
   void setRelayState(String _name, bool state);
+
+  /**
+   * @brief установить состояние всех удаленных реле
+   *
+   * @param state новое состояние реле; true - включено, иначе выключено;
+   * @param _self если true - команда на изменения состояния посылается только для реле, ассоциированных с выключателем; иначе команда посылается для всех реле, доступных в сети;
+   */
+  void setStateForAll(bool state, bool _self = true);
 
   /**
    * @brief поиск связанных реле в сети

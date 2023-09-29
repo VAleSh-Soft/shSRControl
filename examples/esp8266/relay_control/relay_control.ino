@@ -83,7 +83,7 @@ void setup()
   Serial.print("Subnet mask: ");
   Serial.println(WiFi.subnetMask());
 
-  Serial.println(F("Starting UDP"));
+  Serial.print(F("Starting UDP..."));
   if (udp.begin(localPort))
   {
     Serial.println(F("OK"));

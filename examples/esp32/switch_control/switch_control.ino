@@ -2,8 +2,8 @@
  * @file switch_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
  * @brief WiFi switch module
- * @version 1.0
- * @date 18.08.2023
+ * @version 1.1
+ * @date 29.09.2023
  *
  * @copyright Copyright (c) 2023
  *
@@ -62,6 +62,10 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
+  // настраиваем первую кнопку, чтобы при ее удержании более двух секунд можно было отключить все ассоциированные с модулем удаленные реле
+  btn1.setLongClickMode(LCM_ONLYONCE);
+  btn1.setTimeoutOfLongClick(2000);
+
   // не забудьте, форматировать файловую систему нужно только при первом запуске
   if (FORMAT_FILESYSTEM)
   {
@@ -95,7 +99,7 @@ void setup()
   Serial.print("Subnet mask: ");
   Serial.println(WiFi.subnetMask());
 
-  Serial.println(F("Starting UDP"));
+  Serial.print(F("Starting UDP..."));
   if (udp.begin(localPort))
   {
     Serial.println(F("OK"));
@@ -118,6 +122,12 @@ void setup()
 void loop()
 {
   switch_control.tick();
+
+  // при удержании первой кнопки более двух секунд выключаем все реле сразу
+  if (btn1.getLastState() == BTN_LONGCLICK)
+  {
+    switch_control.setStateForAll(false);
+  }
 
   HTTP.handleClient();
 
