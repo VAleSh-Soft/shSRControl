@@ -77,8 +77,6 @@ public:
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _local_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
-   * @param _relay_count количество реле в модуле
-   * @param relay_array массив данных реле
    */
   void begin(WiFiUDP *_udp, uint16_t _local_port);
 
