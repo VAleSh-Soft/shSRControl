@@ -1,16 +1,15 @@
 /**
  * @file switch_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
- * @brief WiFi switch module
- * @version 1.1
- * @date 29.09.2023
+ * @brief WiFi switching module built on esp32
+ * @version 1.2
+ * @date 02.06.2024
  *
  * @copyright Copyright (c) 2023
  *
  */
 #include <WiFi.h>
 #include <WiFiUdp.h>
-#include <shButton.h>
 #include <shSRControl.h>
 
 // модуль WiFi-выключателя
@@ -38,8 +37,8 @@ const int8_t ledPin = 4;
 const int8_t buzzerPin = 17;
 
 // работаем с двумя кнопками на модуле выключателя
-shButton btn1(16);
-shButton btn2(18);
+srButton btn1(16);
+srButton btn2(18);
 
 const uint8_t relays_count = 2;
 

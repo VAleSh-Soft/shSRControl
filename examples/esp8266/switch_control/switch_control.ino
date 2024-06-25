@@ -1,9 +1,9 @@
 /**
  * @file switch_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
- * @brief WiFi switch module
- * @version 1.1
- * @date 29.09.2023
+ * @brief WiFi switching module built on esp8266
+ * @version 1.2
+ * @date 02.06.2024
  *
  * @copyright Copyright (c) 2023
  *

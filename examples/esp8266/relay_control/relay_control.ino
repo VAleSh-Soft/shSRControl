@@ -1,9 +1,9 @@
 /**
  * @file relay_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
- * @brief WiFi relay module
- * @version 1.0
- * @date 18.08.2023
+ * @brief WiFi relay module built on esp8266
+ * @version 1.2
+ * @date 02.06.2024
  *
  * @copyright Copyright (c) 2023
  *
@@ -12,7 +12,6 @@
 #include <ESP8266WebServer.h>
 #include <WiFiUdp.h>
 #include <FS.h>
-#include <shButton.h>
 #include <shSRControl.h>
 
 // модуль WiFi-реле (розетка, люстра и т.д.)
@@ -33,7 +32,7 @@ WiFiUDP udp;
 
 const int8_t ledPin = LED_BUILTIN;
 
-shButton btn1(D5);
+srButton btn1(D5);
 
 // работаем с двумя реле на модуле реле (локальная кнопка - только для первого реле)
 const uint8_t relays_count = 2;
