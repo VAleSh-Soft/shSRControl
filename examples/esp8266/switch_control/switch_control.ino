@@ -12,7 +12,6 @@
 #include <ESP8266WebServer.h>
 #include <WiFiUdp.h>
 #include <FS.h>
-// #include <shButton.h>
 #include <shSRControl.h>
 
 // модуль WiFi-выключателя

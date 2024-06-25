@@ -60,17 +60,13 @@ void srButton::setBtnUpDown(bool flag, uint32_t thisMls)
 
 // ---- srButton public ------------------------
 
-srButton::srButton(uint8_t pin, bool serial_mode)
+srButton::srButton(uint8_t pin)
 {
   _PIN = pin;
   setFlag(INPUTTYPE_BIT, PULL_UP);
   pinMode(_PIN, INPUT_PULLUP);
   // (BTN_INPUT_TYPE == PULL_UP) ? pinMode(_PIN, INPUT_PULLUP) : pinMode(_PIN, INPUT);
   setFlag(BTNTYPE_BIT, BTN_NO);
-  if (serial_mode)
-  {
-    _longclick_mode = LCM_CLICKSERIES;
-  }
 }
 
 uint8_t srButton::getButtonState()

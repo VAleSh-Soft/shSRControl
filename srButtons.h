@@ -52,13 +52,6 @@
 #define LCM_ONLYONCE 1    // однократное событие BTN_LONGCLICK, генерируется только один раз по истечении интервала удержания кнопки, после чего будет постоянно выдаваться BTN_PRESSED до тех пор, пока кнопка будет удерживаться нажатой
 #define LCM_CLICKSERIES 2 // по истечении интервала удержания кнопки событие BTN_LONGCLICK генерируется постоянно через равные интервалы времени, в промежутках выдается BTN_PRESSED
 
-enum srButtonFlag : uint8_t
-{
-  CLK_BTN_FLAG_NONE, // флаг кнопки - ничего не делать
-  CLK_BTN_FLAG_NEXT, // флаг кнопки - изменить значение
-  CLK_BTN_FLAG_EXIT  // флаг кнопки - возврат в режим показа текущего времени
-};
-
 class srButton
 {
 private:
@@ -97,10 +90,8 @@ private:
   // установка кнопке состояния "только что нажата" или "только что отпущена"
   void setBtnUpDown(bool flag, uint32_t thisMls);
 
-  srButtonFlag btn_flag = CLK_BTN_FLAG_NONE;
-
 public:
-  srButton(uint8_t pin, bool serial_mode = false);
+  srButton(uint8_t pin);
 
   // получение текущего состояния кнопки
   uint8_t getButtonState();
