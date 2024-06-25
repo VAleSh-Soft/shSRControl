@@ -12,7 +12,7 @@
 #include <ESP8266WebServer.h>
 #include <WiFiUdp.h>
 #include <FS.h>
-#include <shButton.h>
+// #include <shButton.h>
 #include <shSRControl.h>
 
 // модуль WiFi-выключателя
@@ -35,8 +35,8 @@ const int8_t ledPin = LED_BUILTIN;
 const int8_t buzzerPin = 15;
 
 // работаем с двумя кнопками на модуле выключателя
-shButton btn1(D1);
-shButton btn2(D2);
+srButton btn1(D1);
+srButton btn2(D2);
 
 const uint8_t relays_count = 2;
 

@@ -13,7 +13,7 @@
 #include <WiFiUdp.h>
 #include <FS.h>
 #include <Ticker.h>
-#include <shButton.h>
+#include "srButtons.h"
 
 // описание свойств реле
 struct shRelayData
@@ -22,7 +22,7 @@ struct shRelayData
   uint8_t relayPin;          // пин, к которому подключено реле
   uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
   bool relayLastState;       // последнее состояние реле
-  shButton *relayButton;     // локальная кнопка, управляющая реле (располагается на самом модуле и предназначена для ручного управления реле)
+  srButton *relayButton;     // локальная кнопка, управляющая реле (располагается на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
 };
 
@@ -32,7 +32,7 @@ struct shSwitchData
   String relayName;        // имя ассоциированного с кнопкой удаленного реле
   bool relayFound;         // найдено или нет ассоциированное удаленное реле в сети
   IPAddress relayAddress;  // IP адрес удаленного реле
-  shButton *relayButton;   // кнопка, управляющая удаленным реле
+  srButton *relayButton;   // кнопка, управляющая удаленным реле
   String relayDescription; // описание реле
 };
 // TODO: подумать над возможностью задания множественных реле, имеющих одно имя, но физически расположенных на разных модулях; т.е. добавить еще одно свойство и при его активации посылать запрос на переключение не по адресу, а широковещательным пакетом
