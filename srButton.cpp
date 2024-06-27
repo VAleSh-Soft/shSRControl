@@ -33,7 +33,7 @@ bool srButton::getContactsState()
   return (val);
 }
 
-void srButton::setBtnUpDown(bool flag, uint32_t thisMls)
+void srButton::setBtnUpDown(bool flag, unsigned long thisMls)
 {
   setFlag(DEBOUNCE_BIT, false);
   setFlag(FLAG_BIT, flag);
@@ -71,7 +71,7 @@ srButton::srButton(uint8_t pin)
 
 uint8_t srButton::getButtonState()
 {
-  uint32_t thisMls = millis();
+  unsigned long thisMls = millis();
 
   // если поднят флаг подавления дребезга и интервал еще не вышел, больше ничего не делать
   if (_debounce_timeout > 0 &&

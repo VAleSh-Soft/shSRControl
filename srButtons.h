@@ -76,8 +76,8 @@ private:
    * 7 бит - флаг длинного клика, 0 - не было, 1 - был длинный клик
    */
 
-  uint32_t btn_timer = 0; // таймер отработки подавления дребезга контактов и длинного клика
-  uint32_t dbl_timer = 0; // таймер двойного клика
+  unsigned long btn_timer = 0; // таймер отработки подавления дребезга контактов и длинного клика
+  unsigned long dbl_timer = 0; // таймер двойного клика
 
   // получение состояния бита
   bool getFlag(uint8_t _bit);
@@ -88,7 +88,7 @@ private:
   bool getContactsState();
 
   // установка кнопке состояния "только что нажата" или "только что отпущена"
-  void setBtnUpDown(bool flag, uint32_t thisMls);
+  void setBtnUpDown(bool flag, unsigned long thisMls);
 
 public:
   srButton(uint8_t pin);
