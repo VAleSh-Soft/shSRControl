@@ -8,7 +8,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #else
-#error "The library is designed to be used in an ESP8266 or ESP32 environment"
+#error "The library is designed for use in the ESP8266 or ESP32 environment."
 #endif
 #include <WiFiUdp.h>
 #include <FS.h>
