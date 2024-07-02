@@ -59,7 +59,7 @@ public:
 
   /**
    * @brief инициализация модуля реле
-   * 
+   *
    * @param _relay_array массив данных реле
    * @param _relay_count количество реле
    */
@@ -70,7 +70,11 @@ public:
    *
    * @param _on
    */
+#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
+  void setLogOnState(bool _on, HWCDC *_serial = &Serial);
+#else
   void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
+#endif
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial
@@ -268,7 +272,7 @@ public:
 
   /**
    * @brief инициализация модуля выключателя
-   * 
+   *
    * @param _switch_array массив данных удаленных реле
    * @param _switch_count количество удаленных реле
    */
@@ -279,7 +283,11 @@ public:
    *
    * @param _on
    */
+#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
+  void setLogOnState(bool _on, HWCDC *_serial = &Serial);
+#else
   void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
+#endif
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial

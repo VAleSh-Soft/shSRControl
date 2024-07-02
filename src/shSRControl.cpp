@@ -69,7 +69,11 @@ static String switchFileConfigName = "/switch.json";
 static String module_description = "";
 static bool save_state_of_relay = false;
 
+#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
+static HWCDC *serial = NULL;
+#else
 static HardwareSerial *serial = NULL;
+#endif
 static bool logOnState = true;
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -163,7 +167,11 @@ void shRelayControl::init(shRelayData *_relay_array, uint8_t _relay_count)
   }
 }
 
+#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
+void shRelayControl::setLogOnState(bool _on, HWCDC *_serial)
+#else
 void shRelayControl::setLogOnState(bool _on, HardwareSerial *_serial)
+#endif
 {
   logOnState = _on;
   serial = (logOnState) ? _serial : NULL;
@@ -459,7 +467,11 @@ void shSwitchControl::init(shSwitchData *_switch_array, uint8_t _switch_count)
   }
 }
 
+#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
+void shSwitchControl::setLogOnState(bool _on, HWCDC *_serial)
+#else
 void shSwitchControl::setLogOnState(bool _on, HardwareSerial *_serial)
+#endif
 {
   logOnState = _on;
   serial = (logOnState) ? _serial : NULL;
