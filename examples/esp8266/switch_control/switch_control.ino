@@ -51,12 +51,14 @@ shSwitchData relays[relays_count] = {
         IPAddress(192, 168, 4, 1),
         &btn2}};
 
-shSwitchControl switch_control(relays, relays_count);
+shSwitchControl switch_control;
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
+
+  switch_control.init(relays, relays_count);
 
   // настраиваем первую кнопку, чтобы при ее удержании более двух секунд можно было отключить все ассоциированные с модулем удаленные реле
   btn1.setLongClickMode(LCM_ONLYONCE);
@@ -97,7 +99,7 @@ void setup()
     // установить интервал проверки доступности реле - 60 сек
     switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
-    switch_control.begin(&udp, localPort);
+    switch_control.startDevice(&udp, localPort);
   }
   else
   {

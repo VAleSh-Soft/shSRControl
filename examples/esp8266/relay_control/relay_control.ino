@@ -49,12 +49,14 @@ shRelayData relays[relays_count] = {
         LOW,
         NULL}};
 
-shRelayControl relay_control(relays, relays_count);
+shRelayControl relay_control;
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
+
+  relay_control.init(relays, relays_count);
 
   // подключаем Web-интерфейс
   if (FILESYSTEM.begin())
@@ -87,7 +89,7 @@ void setup()
   {
     Serial.println(F("OK"));
     // запустить контроль модуля реле
-    relay_control.begin(&udp, localPort);
+    relay_control.startDevice(&udp, localPort);
   }
   else
   {

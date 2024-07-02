@@ -144,7 +144,9 @@ static bool load_config_file(ModuleType _mdt);
 
 // ==== shRelayControl class ===========================
 
-shRelayControl::shRelayControl(shRelayData *_relay_array, uint8_t _relay_count)
+shRelayControl::shRelayControl() {}
+
+void shRelayControl::init(shRelayData *_relay_array, uint8_t _relay_count)
 {
   relayArray = _relay_array;
   relayCount = _relay_count;
@@ -169,7 +171,7 @@ void shRelayControl::setLogOnState(bool _on, HardwareSerial *_serial)
 
 bool shRelayControl::getLogOnState() { return (logOnState); }
 
-void shRelayControl::begin(WiFiUDP *_udp, uint16_t _local_port)
+void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
   localPort = _local_port;
@@ -444,7 +446,9 @@ bool shRelayControl::loadConfig()
 
 // ==== shSwitchControl class ==========================
 
-shSwitchControl::shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_count)
+shSwitchControl::shSwitchControl() {}
+
+void shSwitchControl::init(shSwitchData *_switch_array, uint8_t _switch_count)
 {
   switchCount = _switch_count;
   switchArray = _switch_array;
@@ -474,7 +478,7 @@ void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
 
 uint32_t shSwitchControl::getCheckTimer() { return (checkTimer); }
 
-void shSwitchControl::begin(WiFiUDP *_udp, uint16_t _local_port)
+void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
   localPort = _local_port;

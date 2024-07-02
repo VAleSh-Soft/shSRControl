@@ -55,7 +55,15 @@ public:
    * @brief конструктор
    *
    */
-  shRelayControl(shRelayData *_relay_array, uint8_t _relay_count);
+  shRelayControl();
+
+  /**
+   * @brief инициализация модуля реле
+   * 
+   * @param _relay_array массив данных реле
+   * @param _relay_count количество реле
+   */
+  void init(shRelayData *_relay_array, uint8_t _relay_count);
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -73,12 +81,12 @@ public:
   bool getLogOnState();
 
   /**
-   * @brief инициализация модуля
+   * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _local_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
    */
-  void begin(WiFiUDP *_udp, uint16_t _local_port);
+  void startDevice(WiFiUDP *_udp, uint16_t _local_port);
 
   /**
    * @brief подключение Web-интерфейса
@@ -256,7 +264,15 @@ public:
    * @brief конструктор
    *
    */
-  shSwitchControl(shSwitchData *_switch_array, uint8_t _switch_count);
+  shSwitchControl();
+
+  /**
+   * @brief инициализация модуля выключателя
+   * 
+   * @param _switch_array массив данных удаленных реле
+   * @param _switch_count количество удаленных реле
+   */
+  void init(shSwitchData *_switch_array, uint8_t _switch_count);
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -304,14 +320,12 @@ public:
   uint32_t getCheckTimer();
 
   /**
-   * @brief инициализация модуля
+   * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _local_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
-   * @param _switch_count количество реле в модуле
-   * @param _switch_array массив данных реле
    */
-  void begin(WiFiUDP *_udp, uint16_t _local_port);
+  void startDevice(WiFiUDP *_udp, uint16_t _local_port);
 
   /**
    * @brief подключение Web-интерфейса
