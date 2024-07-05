@@ -69,6 +69,7 @@ public:
    * @brief включение/отключение вывода информации о работе модуля через Serial
    *
    * @param _on
+   * @param _serial интерфейс для вывода сообщений
    */
 #if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
   void setLogOnState(bool _on, HWCDC *_serial = &Serial);
@@ -282,6 +283,7 @@ public:
    * @brief включение/отключение вывода информации о работе модуля через Serial
    *
    * @param _on
+   * @param _serial интерфейс для вывода сообщений
    */
 #if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
   void setLogOnState(bool _on, HWCDC *_serial = &Serial);
