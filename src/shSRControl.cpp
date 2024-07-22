@@ -259,20 +259,23 @@ void shRelayControl::respondToRelayCheck(int8_t index)
 
 void set_state(int8_t relay_index, String comm)
 {
-  if (comm == sr_switch_str)
+  if ((relay_index >= 0) && (relay_index < relayCount))
   {
-    switch_local_relay(relay_index);
-  }
-  else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
-  {
-    set_local_relay_state(relay_index, (comm == sr_set_on_str));
-  }
+    if (comm == sr_switch_str)
+    {
+      switch_local_relay(relay_index);
+    }
+    else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
+    {
+      set_local_relay_state(relay_index, (comm == sr_set_on_str));
+    }
 
-  String s = get_json_string_to_send(relayArray[relay_index].relayName,
-                                     relayArray[relay_index].relayDescription,
-                                     get_relay_state(relay_index),
-                                     comm);
-  send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+    String s = get_json_string_to_send(relayArray[relay_index].relayName,
+                                       relayArray[relay_index].relayDescription,
+                                       get_relay_state(relay_index),
+                                       comm);
+    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+  }
 }
 
 void shRelayControl::receiveUdpPacket(int _size)
