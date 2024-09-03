@@ -34,20 +34,13 @@ const int8_t ledPin = LED_BUILTIN;
 
 srButton btn1(D5);
 
-// работаем с двумя реле на модуле реле (локальная кнопка - только для первого реле)
+// работаем с двумя реле на модуле
 const uint8_t relays_count = 2;
 
+// заполняем данные локальных реле (локальная кнопка - только для первого реле)
 shRelayData relays[relays_count] = {
-    (shRelayData){
-        "relay1",
-        D1,
-        LOW,
-        &btn1},
-    (shRelayData){
-        "relay2",
-        D2,
-        LOW,
-        NULL}};
+    shRelayData("relay1", D1, LOW, &btn1),
+    shRelayData("relay2", D2, LOW)};
 
 shRelayControl relay_control;
 
@@ -96,7 +89,7 @@ void setup()
     Serial.println(F("failed, restart"));
     ESP.restart();
   }
-  
+
   HTTP.onNotFound([]()
                   { HTTP.send(404, "text/plan", F("404. File not found.")); });
   HTTP.begin();

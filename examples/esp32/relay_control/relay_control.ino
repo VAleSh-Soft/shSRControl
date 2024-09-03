@@ -37,20 +37,14 @@ const int8_t ledPin = 4;
 
 srButton btn1(17);
 
-// работаем с двумя реле на модуле реле (локальная кнопка - только для первого реле)
+
+// работаем с двумя реле на модуле
 const uint8_t relays_count = 2;
 
+// заполняем данные локальных реле (локальная кнопка - только для первого реле)
 shRelayData relays[relays_count] = {
-    (shRelayData){
-        "relay1",
-        16,
-        LOW,
-        &btn1},
-    (shRelayData){
-        "relay2",
-        18,
-        LOW,
-        NULL}};
+    shRelayData("relay1", 16, LOW, &btn1),
+    shRelayData("relay2", 18, LOW)};
 
 shRelayControl relay_control;
 

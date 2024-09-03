@@ -40,19 +40,13 @@ const int8_t buzzerPin = 17;
 srButton btn1(16);
 srButton btn2(18);
 
+// работаем с двумя удаленными реле
 const uint8_t relays_count = 2;
 
+// заполняем данные удаленных реле
 shSwitchData relays[relays_count] = {
-    (shSwitchData){
-        "relay1",
-        false,
-        IPAddress(192, 168, 4, 1),
-        &btn1},
-    (shSwitchData){
-        "relay2",
-        false,
-        IPAddress(192, 168, 4, 1),
-        &btn2}};
+    shSwitchData("relay1", &btn1),
+    shSwitchData("relay2", &btn2)};
 
 shSwitchControl switch_control;
 

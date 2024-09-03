@@ -24,6 +24,15 @@ struct shRelayData
   bool relayLastState;       // последнее состояние реле
   srButton *relayButton;     // локальная кнопка, управляющая реле (располагается на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
+  shRelayData(String relay_name,
+              uint8_t relay_pin,
+              uint8_t control_level,
+              srButton *relay_button = nullptr,
+              String relay_description = "") : relayName(relay_name),
+                                               relayPin(relay_pin),
+                                               relayControlLevel(control_level),
+                                               relayButton(relay_button),
+                                               relayDescription(relay_description) {}
 };
 
 // описание свойств выключателя
@@ -33,7 +42,12 @@ struct shSwitchData
   bool relayFound;         // найдено или нет ассоциированное удаленное реле в сети
   IPAddress relayAddress;  // IP адрес удаленного реле
   srButton *relayButton;   // кнопка, управляющая удаленным реле
-  String relayDescription; // описание реле
+  String relayDescription; // описание удаленного реле
+  shSwitchData(String relay_name,
+               srButton *relay_button = nullptr,
+               String relay_description = "") : relayName(relay_name),
+                                                relayButton(relay_button),
+                                                relayDescription(relay_description) {}
 };
 // TODO: подумать над возможностью задания множественных реле, имеющих одно имя, но физически расположенных на разных модулях; т.е. добавить еще одно свойство и при его активации посылать запрос на переключение не по адресу, а широковещательным пакетом
 
