@@ -32,7 +32,8 @@ struct shRelayData
                                                relayPin(relay_pin),
                                                relayControlLevel(control_level),
                                                relayButton(relay_button),
-                                               relayDescription(relay_description) {}
+                                               relayDescription(relay_description),
+                                               relayLastState(false) {}
 };
 
 // описание свойств выключателя
@@ -47,7 +48,9 @@ struct shSwitchData
                srButton *relay_button = nullptr,
                String relay_description = "") : relayName(relay_name),
                                                 relayButton(relay_button),
-                                                relayDescription(relay_description) {}
+                                                relayDescription(relay_description),
+                                                relayFound(false),
+                                                relayAddress(IPAddress(0, 0, 0, 0)) {}
 };
 // TODO: подумать над возможностью задания множественных реле, имеющих одно имя, но физически расположенных на разных модулях; т.е. добавить еще одно свойство и при его активации посылать запрос на переключение не по адресу, а широковещательным пакетом
 
