@@ -24,6 +24,12 @@ struct shRelayData
   bool relayLastState;       // последнее состояние реле
   srButton *relayButton;     // локальная кнопка, управляющая реле (располагается на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
+  shRelayData() : relayName(""),
+                  relayPin(255),
+                  relayControlLevel(HIGH),
+                  relayButton(nullptr),
+                  relayDescription(""),
+                  relayLastState(false) {}
   shRelayData(String relay_name,
               uint8_t relay_pin,
               uint8_t control_level,
@@ -44,13 +50,17 @@ struct shSwitchData
   IPAddress relayAddress;  // IP адрес удаленного реле
   srButton *relayButton;   // кнопка, управляющая удаленным реле
   String relayDescription; // описание удаленного реле
+  shSwitchData() : relayName(""),
+                   relayButton(nullptr),
+                   relayDescription(""),
+                   relayFound(false),
+                   relayAddress(IPAddress(0, 0, 0, 0)) {}
   shSwitchData(String relay_name,
-               srButton *relay_button = nullptr,
-               String relay_description = "") : relayName(relay_name),
-                                                relayButton(relay_button),
-                                                relayDescription(relay_description),
-                                                relayFound(false),
-                                                relayAddress(IPAddress(0, 0, 0, 0)) {}
+               srButton *relay_button = nullptr) : relayName(relay_name),
+                                                   relayButton(relay_button),
+                                                   relayDescription(""),
+                                                   relayFound(false),
+                                                   relayAddress(IPAddress(0, 0, 0, 0)) {}
 };
 // TODO: подумать над возможностью задания множественных реле, имеющих одно имя, но физически расположенных на разных модулях; т.е. добавить еще одно свойство и при его активации посылать запрос на переключение не по адресу, а широковещательным пакетом
 
@@ -77,10 +87,25 @@ public:
   /**
    * @brief инициализация модуля реле
    *
-   * @param _relay_array массив данных реле
    * @param _relay_count количество реле
    */
-  void init(shRelayData *_relay_array, uint8_t _relay_count);
+  void init(uint8_t _relay_count);
+
+  /**
+   * @brief добавление данных локального реле
+   *
+   * @param relay_name имя реле
+   * @param relay_pin пин, к которому подключено реле
+   * @param control_level логический уровень, которым управляется реле (HIGH или LOW)
+   * @param relay_button локальная кнопка для управления реле
+   * @param relay_description описание реле
+   * @return true если реле добавлено успешно, иначе false
+   */
+  bool addRelay(String relay_name,
+                uint8_t relay_pin,
+                uint8_t control_level,
+                srButton *relay_button = nullptr,
+                String relay_description = "");
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -88,11 +113,7 @@ public:
    * @param _on
    * @param _serial интерфейс для вывода сообщений
    */
-#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
-  void setLogOnState(bool _on, HWCDC *_serial = &Serial);
-#else
-  void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
-#endif
+  void setLogOnState(bool _on, Print *_serial = &Serial);
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial
@@ -291,10 +312,19 @@ public:
   /**
    * @brief инициализация модуля выключателя
    *
-   * @param _switch_array массив данных удаленных реле
    * @param _switch_count количество удаленных реле
    */
-  void init(shSwitchData *_switch_array, uint8_t _switch_count);
+  void init(uint8_t _switch_count);
+
+  /**
+   * @brief добавление данных удаленного реле
+   *
+   * @param relay_name имя реле
+   * @param relay_button кнопка, управляющая удаленным реле
+   * @return true если данные добавлены успешно, иначе false
+   */
+  bool addRelay(String relay_name,
+                srButton *relay_button = nullptr);
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -302,11 +332,7 @@ public:
    * @param _on
    * @param _serial интерфейс для вывода сообщений
    */
-#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
-  void setLogOnState(bool _on, HWCDC *_serial = &Serial);
-#else
-  void setLogOnState(bool _on, HardwareSerial *_serial = &Serial);
-#endif
+  void setLogOnState(bool _on, Print *_serial = &Serial);
 
   /**
    * @brief включен или отключен вывод информации о работе модуля через Serial

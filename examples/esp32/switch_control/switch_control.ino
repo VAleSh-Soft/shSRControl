@@ -40,14 +40,6 @@ const int8_t buzzerPin = 17;
 srButton btn1(16);
 srButton btn2(18);
 
-// работаем с двумя удаленными реле
-const uint8_t relays_count = 2;
-
-// заполняем данные удаленных реле
-shSwitchData relays[relays_count] = {
-    shSwitchData("relay1", &btn1),
-    shSwitchData("relay2", &btn2)};
-
 shSwitchControl switch_control;
 
 void setup()
@@ -55,7 +47,12 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
-  switch_control.init(relays, relays_count);
+  // работаем с двумя удаленными реле
+  switch_control.init(2);
+
+  // заполняем данные удаленных реле
+  switch_control.addRelay("relay1", &btn1);
+  switch_control.addRelay("relay2", &btn2);
 
   // настраиваем первую кнопку, чтобы при ее удержании более двух секунд можно было отключить все ассоциированные с модулем удаленные реле
   btn1.setLongClickMode(LCM_ONLYONCE);

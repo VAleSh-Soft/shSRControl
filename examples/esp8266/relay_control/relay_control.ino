@@ -34,14 +34,6 @@ const int8_t ledPin = LED_BUILTIN;
 
 srButton btn1(D5);
 
-// работаем с двумя реле на модуле
-const uint8_t relays_count = 2;
-
-// заполняем данные локальных реле (локальная кнопка - только для первого реле)
-shRelayData relays[relays_count] = {
-    shRelayData("relay1", D1, LOW, &btn1),
-    shRelayData("relay2", D2, LOW)};
-
 shRelayControl relay_control;
 
 void setup()
@@ -49,7 +41,12 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
-  relay_control.init(relays, relays_count);
+  // работаем с двумя реле на модуле
+  relay_control.init(2);
+  
+  // заполняем данные локальных реле (локальная кнопка - только для первого реле)
+  relay_control.addRelay("relay1", D1, LOW, &btn1);
+  relay_control.addRelay("relay2", D2, LOW);
 
   // подключаем Web-интерфейс
   if (FILESYSTEM.begin())

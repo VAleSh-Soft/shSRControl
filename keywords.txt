@@ -20,6 +20,7 @@ getLogOnState	KEYWORD2
 setErrorBuzzerState	KEYWORD2
 getErrorBuzzerState	KEYWORD2
 init	KEYWORD2
+addRelay	KEYWORD2
 startDevice	KEYWORD2
 attachWebInterface	KEYWORD2
 tick	KEYWORD2

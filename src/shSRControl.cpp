@@ -69,11 +69,7 @@ static String switchFileConfigName = "/switch.json";
 static String module_description = "";
 static bool save_state_of_relay = false;
 
-#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
-static HWCDC *serial = NULL;
-#else
-static HardwareSerial *serial = NULL;
-#endif
+static Print *serial = NULL;
 static bool logOnState = true;
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -150,28 +146,49 @@ static bool load_config_file(ModuleType _mdt);
 
 shRelayControl::shRelayControl() {}
 
-void shRelayControl::init(shRelayData *_relay_array, uint8_t _relay_count)
+void shRelayControl::init(uint8_t _relay_count)
 {
-  relayArray = _relay_array;
-  relayCount = _relay_count;
+  relayArray = new shRelayData[_relay_count];
+  if (relayArray)
+  {
+    relayCount = _relay_count;
+  }
 
   if (&Serial != NULL)
   {
     serial = &Serial;
   }
-
-  for (uint8_t i = 0; i < relayCount; i++)
-  {
-    digitalWrite(relayArray[i].relayPin, !relayArray[i].relayControlLevel);
-    pinMode(relayArray[i].relayPin, OUTPUT);
-  }
 }
 
-#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
-void shRelayControl::setLogOnState(bool _on, HWCDC *_serial)
-#else
-void shRelayControl::setLogOnState(bool _on, HardwareSerial *_serial)
-#endif
+bool shRelayControl::addRelay(String relay_name,
+                              uint8_t relay_pin,
+                              uint8_t control_level,
+                              srButton *relay_button,
+                              String relay_description)
+{
+  bool result = false;
+  if (relayCount > 0)
+  {
+    for (uint8_t i = 0; i < relayCount; i++)
+    {
+      if (relayArray[i].relayName == "")
+      {
+        relayArray[i] = shRelayData(relay_name,
+                                    relay_pin,
+                                    control_level,
+                                    relay_button,
+                                    relay_description);
+        digitalWrite(relay_pin, !control_level);
+        pinMode(relay_pin, OUTPUT);
+        result = true;
+        break;
+      }
+    }
+  }
+  return (result);
+}
+
+void shRelayControl::setLogOnState(bool _on, Print *_serial)
 {
   logOnState = _on;
   serial = (logOnState) ? _serial : NULL;
@@ -459,10 +476,13 @@ bool shRelayControl::loadConfig()
 
 shSwitchControl::shSwitchControl() {}
 
-void shSwitchControl::init(shSwitchData *_switch_array, uint8_t _switch_count)
+void shSwitchControl::init(uint8_t _switch_count)
 {
-  switchCount = _switch_count;
-  switchArray = _switch_array;
+  switchArray = new shSwitchData[_switch_count];
+  if (switchArray)
+  {
+    switchCount = _switch_count;
+  }
 
   if (&Serial != NULL)
   {
@@ -470,11 +490,27 @@ void shSwitchControl::init(shSwitchData *_switch_array, uint8_t _switch_count)
   }
 }
 
-#if ARDUINO_USB_CDC_ON_BOOT // Serial используется для USB CDC
-void shSwitchControl::setLogOnState(bool _on, HWCDC *_serial)
-#else
-void shSwitchControl::setLogOnState(bool _on, HardwareSerial *_serial)
-#endif
+bool shSwitchControl::addRelay(String relay_name,
+                               srButton *relay_button)
+{
+  bool result = false;
+  if (switchCount > 0)
+  {
+    for (uint8_t i = 0; i < switchCount; i++)
+    {
+      if (switchArray[i].relayName == "")
+      {
+        switchArray[i] = shSwitchData(relay_name,
+                                      relay_button);
+        result = true;
+        break;
+      }
+    }
+  }
+  return (result);
+}
+
+void shSwitchControl::setLogOnState(bool _on, Print *_serial)
 {
   logOnState = _on;
   serial = (logOnState) ? _serial : NULL;
