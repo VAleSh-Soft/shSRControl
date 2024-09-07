@@ -256,7 +256,12 @@ void shRelayControl::tick()
 
   int packet_size = udp->parsePacket();
   if (packet_size > 0)
+  {
     receiveUdpPacket(packet_size);
+  }
+
+  http_server->handleClient();
+  delay(1);
 }
 
 void shRelayControl::respondToRelayCheck(int8_t index)
@@ -587,7 +592,12 @@ void shSwitchControl::tick()
 
   int packet_size = udp->parsePacket();
   if (packet_size > 0)
+  {
     receiveUdpPacket(packet_size);
+  }
+
+  http_server->handleClient();
+  delay(1);
 }
 
 void shSwitchControl::receiveUdpPacket(int _size)

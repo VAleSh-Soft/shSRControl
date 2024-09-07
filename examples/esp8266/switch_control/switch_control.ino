@@ -111,8 +111,4 @@ void loop()
   {
     switch_control.setStateForAll(false);
   }
-
-  HTTP.handleClient();
-
-  delay(1);
 }

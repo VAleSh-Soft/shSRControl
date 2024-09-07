@@ -103,8 +103,4 @@ void setup()
 void loop()
 {
   relay_control.tick();
-
-  HTTP.handleClient();
-
-  delay(1);
 }
