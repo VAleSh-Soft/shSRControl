@@ -3,10 +3,10 @@
 #include "extras/c_page.h"
 #include "extras/i_page.h"
 
-#define print(x)            \
+#define SR_PRINT(x)            \
   if (logOnState && serial) \
   serial->print(x)
-#define println(x)          \
+#define SR_PRINTLN(x)          \
   if (logOnState && serial) \
   serial->println(x)
 
@@ -34,7 +34,7 @@ static const String sr_respond_str = "respond";
 static const String sr_any_str = "any_relay";
 
 /*
-строка запроса от выключателя - имя реле и команда: отозваться, если идет поиск, или переключить состояние реле
+строка запроса от выключателя - имя реле и команда: отозваться, если идет поиск, или выполнить команду
 {"name":"any_relay","command":"respond"}
 {"name":"relay1","command":"switch"}
 
@@ -276,9 +276,9 @@ void shRelayControl::respondToRelayCheck(int8_t index)
                                        relayArray[index].relayDescription,
                                        sr_ok_str,
                                        sr_respond_str);
-    print(relayArray[index].relayName);
-    print(F(": request received, response - "));
-    println(sr_ok_str);
+    SR_PRINT(relayArray[index].relayName);
+    SR_PRINT(F(": request received, response - "));
+    SR_PRINTLN(sr_ok_str);
     send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
   }
 }
@@ -624,35 +624,35 @@ void shSwitchControl::receiveUdpPacket(int _size)
       {
         switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
         switchArray[relay_index].relayAddress = udp->remoteIP();
-        print(switchArray[relay_index].relayName);
-        print(F(" found, IP address: "));
-        println(switchArray[relay_index].relayAddress);
+        SR_PRINT(switchArray[relay_index].relayName);
+        SR_PRINT(F(" found, IP address: "));
+        SR_PRINTLN(switchArray[relay_index].relayAddress);
       }
       else if (arg_for == sr_switch_str ||
                arg_for == sr_set_on_str ||
                arg_for == sr_set_off_str)
       {
-        print(switchArray[relay_index].relayName);
-        print(F(" response - "));
-        println(get_argument(_resp, sr_response_str));
+        SR_PRINT(switchArray[relay_index].relayName);
+        SR_PRINT(F(" response - "));
+        SR_PRINTLN(get_argument(_resp, sr_response_str));
       }
     }
     else
     {
       // ответ на случай, если имя ответившего реле модулю неизвестно
-      print(F("Module "));
-      print(get_argument(_resp, sr_name_str));
-      print(F(", "));
-      print(get_argument(_resp, sr_descr_str));
-      print(F(" response - "));
-      println(get_argument(_resp, sr_response_str));
+      SR_PRINT(F("Module "));
+      SR_PRINT(get_argument(_resp, sr_name_str));
+      SR_PRINT(F(", "));
+      SR_PRINT(get_argument(_resp, sr_descr_str));
+      SR_PRINT(F(" response - "));
+      SR_PRINTLN(get_argument(_resp, sr_response_str));
     }
 #if defined(ARDUINO_ARCH_ESP8266)
   }
   else
   {
-    print(F("Skip broadcast packet "));
-    println(udp->remoteIP());
+    SR_PRINT(F("Skip broadcast packet "));
+    SR_PRINTLN(udp->remoteIP());
   }
 #endif
 }
@@ -798,8 +798,8 @@ static bool get_value_of_argument(String &_res, String _arg, String &_str)
   }
   else
   {
-    println(F("invalid response data"));
-    println(error.f_str());
+    SR_PRINTLN(F("invalid response data"));
+    SR_PRINTLN(error.f_str());
   }
 
   if (result)
@@ -830,10 +830,10 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
 
   if (!result)
   {
-    print(F("Error sending UDP packet for IP "));
-    print(address);
-    print(F(", remote port: "));
-    println((String)localPort);
+    SR_PRINT(F("Error sending UDP packet for IP "));
+    SR_PRINT(address);
+    SR_PRINT(F(", remote port: "));
+    SR_PRINTLN((String)localPort);
   }
 
   return (result);
@@ -897,9 +897,9 @@ static void set_local_relay_state(int8_t index, bool state)
       save_config_file(mtRelay);
     }
 
-    print(relayArray[index].relayName);
-    print(F(": state - "));
-    println(get_relay_state(index));
+    SR_PRINT(relayArray[index].relayName);
+    SR_PRINT(F(": state - "));
+    SR_PRINTLN(get_relay_state(index));
   }
 }
 
@@ -938,16 +938,16 @@ static void set_all_remote_relay_state(bool state)
 
     String st = (state) ? sr_set_on_str : sr_set_off_str;
     String s = get_json_string_to_send(sr_any_str, st);
-    print(F("Sending a request to set the state for all remote relays: "));
-    println(st);
-    print(F("Broadcast address: "));
-    println(broadcastAddress);
+    SR_PRINT(F("Sending a request to set the state for all remote relays: "));
+    SR_PRINTLN(st);
+    SR_PRINT(F("Broadcast address: "));
+    SR_PRINTLN(broadcastAddress);
     send_udp_packet(broadcastAddress, s.c_str(), s.length());
   }
   else
   {
     err.startBuzzer(3);
-    println(F("Failed to send command to remote relay, connection lost"));
+    SR_PRINTLN(F("Failed to send command to remote relay, connection lost"));
   }
 }
 
@@ -963,22 +963,22 @@ static void send_command_for_relay(int8_t index, String command)
       {
         String s = get_json_string_to_send(switchArray[index].relayName,
                                            command);
-        println(F("Sending a command to remote relay"));
-        print(F("Relay name: "));
-        print(switchArray[index].relayName);
-        print(F("; IP: "));
-        print(switchArray[index].relayAddress);
-        print(F("; command: "));
-        println(command);
+        SR_PRINTLN(F("Sending a command to remote relay"));
+        SR_PRINT(F("Relay name: "));
+        SR_PRINT(switchArray[index].relayName);
+        SR_PRINT(F("; IP: "));
+        SR_PRINT(switchArray[index].relayAddress);
+        SR_PRINT(F("; command: "));
+        SR_PRINTLN(command);
         switchArray[index].relayFound = false;
         send_udp_packet(switchArray[index].relayAddress, s.c_str(), s.length());
       }
       else
       {
         err.startBuzzer(2);
-        print(F("Relay "));
-        print(switchArray[index].relayName);
-        println(F(" not found!"));
+        SR_PRINT(F("Relay "));
+        SR_PRINT(switchArray[index].relayName);
+        SR_PRINTLN(F(" not found!"));
         find_remote_relays();
       }
     }
@@ -986,7 +986,7 @@ static void send_command_for_relay(int8_t index, String command)
   else
   {
     err.startBuzzer(3);
-    println(F("Failed to send command to remote relay, connection lost"));
+    SR_PRINTLN(F("Failed to send command to remote relay, connection lost"));
   }
 }
 
@@ -1000,9 +1000,9 @@ static void find_remote_relays()
   IPAddress broadcastAddress = get_broadcast_address();
 
   String s = get_json_string_to_send(sr_any_str, sr_respond_str);
-  println(F("Sending a request to check IP addresses of relays"));
-  print(F("Broadcast address: "));
-  println(broadcastAddress);
+  SR_PRINTLN(F("Sending a request to check IP addresses of relays"));
+  SR_PRINT(F("Broadcast address: "));
+  SR_PRINTLN(broadcastAddress);
   send_udp_packet(broadcastAddress, s.c_str(), s.length());
 }
 
@@ -1111,7 +1111,7 @@ static void handleSetConfig()
   if (http_server->hasArg("plain") == false)
   {
     http_server->send(200, FPSTR(TEXT_PLAIN), F("Body not received"));
-    println(F("Failed to save configuration data, no data"));
+    SR_PRINTLN(F("Failed to save configuration data, no data"));
     return;
   }
 
@@ -1122,8 +1122,8 @@ static void handleSetConfig()
   DeserializationError error = deserializeJson(doc, json);
   if (error)
   {
-    println(F("Failed to save configuration data, invalid json data"));
-    println(error.f_str());
+    SR_PRINTLN(F("Failed to save configuration data, invalid json data"));
+    SR_PRINTLN(error.f_str());
   }
   else
   {
@@ -1257,8 +1257,8 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
 
   String fileName = get_config_file_name(_mdt);
 
-  print(F("Save settings to file "));
-  println(fileName);
+  SR_PRINT(F("Save settings to file "));
+  SR_PRINTLN(fileName);
 
   File configFile;
 
@@ -1270,8 +1270,8 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
 
   if (!configFile)
   {
-    print(F("Failed to create configuration file: "));
-    println(fileName);
+    SR_PRINT(F("Failed to create configuration file: "));
+    SR_PRINTLN(fileName);
     return (false);
   }
 
@@ -1279,12 +1279,12 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
   bool result = serializeJson(doc, configFile);
   if (result)
   {
-    println(F("OK"));
+    SR_PRINTLN(F("OK"));
   }
   else
   {
-    print(F("Failed to write file "));
-    println(fileName);
+    SR_PRINT(F("Failed to write file "));
+    SR_PRINTLN(fileName);
   }
 
   configFile.close();
@@ -1296,8 +1296,8 @@ static bool load_config_file(ModuleType _mdt)
   File configFile;
   String fileName = get_config_file_name(_mdt);
 
-  print(F("Load settings from file "));
-  println(fileName);
+  SR_PRINT(F("Load settings from file "));
+  SR_PRINTLN(fileName);
 
   // находим и открываем для чтения файл конфигурации
   bool result = file_system &&
@@ -1307,7 +1307,7 @@ static bool load_config_file(ModuleType _mdt)
   // если файл конфигурации не найден, сохранить настройки по умолчанию
   if (!result)
   {
-    println(F("Config file not found, default config used."));
+    SR_PRINTLN(F("Config file not found, default config used."));
     save_config_file(_mdt);
     return (result);
   }
@@ -1315,7 +1315,7 @@ static bool load_config_file(ModuleType _mdt)
   size_t size = configFile.size();
   if (size > CONFIG_SIZE)
   {
-    println(F("WiFi configuration file size is too large."));
+    SR_PRINTLN(F("WiFi configuration file size is too large."));
     configFile.close();
     return (false);
   }
@@ -1326,9 +1326,9 @@ static bool load_config_file(ModuleType _mdt)
   configFile.close();
   if (error)
   {
-    print("Data serialization error: ");
-    println(error.f_str());
-    println(F("Failed to read config file, default config is used"));
+    SR_PRINT("Data serialization error: ");
+    SR_PRINTLN(error.f_str());
+    SR_PRINTLN(F("Failed to read config file, default config is used"));
     result = false;
   }
   else
@@ -1338,7 +1338,7 @@ static bool load_config_file(ModuleType _mdt)
   }
   if (result)
   {
-    println(F("OK"));
+    SR_PRINTLN(F("OK"));
   }
 
   return (result);
