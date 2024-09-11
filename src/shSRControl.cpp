@@ -3,6 +3,13 @@
 #include "extras/c_page.h"
 #include "extras/i_page.h"
 
+#define print(x)            \
+  if (logOnState && serial) \
+  serial->print(x)
+#define println(x)          \
+  if (logOnState && serial) \
+  serial->println(x)
+
 // ==== имена параметров в запросах ==================
 static const String sr_name_str = "name";
 static const String sr_command_str = "command";
@@ -94,9 +101,6 @@ static String get_json_string_to_send(String _name,
                                       String _descr,
                                       String _comm,
                                       String _for);
-
-static void print(String _str);
-static void println(String _str);
 
 static void switch_local_relay(int8_t index);
 static void set_local_relay_state(int8_t index, bool state);
@@ -622,7 +626,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
         switchArray[relay_index].relayAddress = udp->remoteIP();
         print(switchArray[relay_index].relayName);
         print(F(" found, IP address: "));
-        println(switchArray[relay_index].relayAddress.toString());
+        println(switchArray[relay_index].relayAddress);
       }
       else if (arg_for == sr_switch_str ||
                arg_for == sr_set_on_str ||
@@ -648,7 +652,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
   else
   {
     print(F("Skip broadcast packet "));
-    println(udp->remoteIP().toString());
+    println(udp->remoteIP());
   }
 #endif
 }
@@ -764,7 +768,7 @@ bool shSwitchControl::loadConfig()
 
 static IPAddress get_broadcast_address()
 {
-  IPAddress result{0, 0, 0, 0};
+  IPAddress result(0, 0, 0, 0);
   if (WiFi.isConnected())
   {
     result = (uint32_t)WiFi.localIP() | ~((uint32_t)WiFi.subnetMask());
@@ -827,7 +831,7 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
   if (!result)
   {
     print(F("Error sending UDP packet for IP "));
-    print(address.toString());
+    print(address);
     print(F(", remote port: "));
     println((String)localPort);
   }
@@ -868,22 +872,6 @@ static String get_json_string_to_send(String _name, String _comm)
   serializeJson(doc, _res);
 
   return (_res);
-}
-
-static void print(String _str)
-{
-  if (logOnState && serial)
-  {
-    serial->print(_str);
-  }
-}
-
-static void println(String _str)
-{
-  if (logOnState && serial)
-  {
-    serial->println(_str);
-  }
 }
 
 static void switch_local_relay(int8_t index)
@@ -953,7 +941,7 @@ static void set_all_remote_relay_state(bool state)
     print(F("Sending a request to set the state for all remote relays: "));
     println(st);
     print(F("Broadcast address: "));
-    println(broadcastAddress.toString());
+    println(broadcastAddress);
     send_udp_packet(broadcastAddress, s.c_str(), s.length());
   }
   else
@@ -979,7 +967,7 @@ static void send_command_for_relay(int8_t index, String command)
         print(F("Relay name: "));
         print(switchArray[index].relayName);
         print(F("; IP: "));
-        print(switchArray[index].relayAddress.toString());
+        print(switchArray[index].relayAddress);
         print(F("; command: "));
         println(command);
         switchArray[index].relayFound = false;
@@ -1014,7 +1002,7 @@ static void find_remote_relays()
   String s = get_json_string_to_send(sr_any_str, sr_respond_str);
   println(F("Sending a request to check IP addresses of relays"));
   print(F("Broadcast address: "));
-  println(broadcastAddress.toString());
+  println(broadcastAddress);
   send_udp_packet(broadcastAddress, s.c_str(), s.length());
 }
 
