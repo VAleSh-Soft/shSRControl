@@ -1311,7 +1311,7 @@ static bool load_config_file(ModuleType _mdt)
     save_config_file(_mdt);
     return (result);
   }
-  // Проверяем размер файла, будем использовать файл размером меньше 1024 байта
+  // Проверяем размер файла, будем использовать файл размером меньше 2048 байта
   size_t size = configFile.size();
   if (size > CONFIG_SIZE)
   {
