@@ -3,10 +3,10 @@
 #include "extras/c_page.h"
 #include "extras/i_page.h"
 
-#define SR_PRINT(x)            \
+#define SR_PRINT(x)         \
   if (logOnState && serial) \
   serial->print(x)
-#define SR_PRINTLN(x)          \
+#define SR_PRINTLN(x)       \
   if (logOnState && serial) \
   serial->println(x)
 
@@ -93,14 +93,14 @@ static ErrorBuzzer err;
 // ===================================================
 
 static IPAddress get_broadcast_address();
-static bool get_value_of_argument(String &_res, String _arg, String &_str);
+static bool get_value_of_argument(String &_res, const String &_arg, String &_str);
 static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize);
-static String get_argument(String _res, String _arg);
-static String get_json_string_to_send(String _name, String _comm);
-static String get_json_string_to_send(String _name,
-                                      String _descr,
-                                      String _comm,
-                                      String _for);
+static String get_argument(String &_res, const String &_arg);
+static String get_json_string_to_send(const String &_name, const String &_comm);
+static String get_json_string_to_send(const String &_name,
+                                      const String &_descr,
+                                      const String &_comm,
+                                      const String &_for);
 
 static void switch_local_relay(int8_t index);
 static void set_local_relay_state(int8_t index, bool state);
@@ -109,7 +109,7 @@ static String get_relay_state(int8_t index);
 static void switch_remote_relay(int8_t index);
 static void set_remote_relay_state(int8_t index, bool state);
 static void set_all_remote_relay_state(bool state);
-static void send_command_for_relay(int8_t index, String command);
+static void send_command_for_relay(int8_t index, const String &command);
 
 static void find_remote_relays();
 
@@ -126,9 +126,9 @@ static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 
 static void get_relay_data_json(JsonObject &rel,
-                                String _name,
-                                String _descr,
-                                int8_t _last = -1);
+                                const String &_name,
+                                const String &_descr,
+                                const int8_t _last = -1);
 static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl);
 static String get_config_json_string(ModuleType _mdl);
 
@@ -164,11 +164,11 @@ void shRelayControl::init(uint8_t _relay_count)
   }
 }
 
-bool shRelayControl::addRelay(String relay_name,
+bool shRelayControl::addRelay(const String &relay_name,
                               uint8_t relay_pin,
                               uint8_t control_level,
                               srButton *relay_button,
-                              String relay_description)
+                              const String &relay_description)
 {
   bool result = false;
   if (relayCount > 0)
@@ -404,7 +404,7 @@ String shRelayControl::getRelayState(String _name)
   return (get_relay_state(getRelayIndexByName(_name)));
 }
 
-void shRelayControl::setModuleDescription(String _descr)
+void shRelayControl::setModuleDescription(String &_descr)
 {
   module_description = _descr;
 }
@@ -424,7 +424,7 @@ bool shRelayControl::getSaveStateOfRelay()
   return (save_state_of_relay);
 }
 
-void shRelayControl::setRelayName(int8_t index, String _name)
+void shRelayControl::setRelayName(int8_t index, String &_name)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -442,7 +442,7 @@ String shRelayControl::getRelayName(int8_t index)
   return (result);
 }
 
-void setRelayDescription(int8_t index, String _descr)
+void shRelayControl::setRelayDescription(int8_t index, String &_descr)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -450,7 +450,7 @@ void setRelayDescription(int8_t index, String _descr)
   }
 }
 
-String getRelayDescription(int8_t index)
+String shRelayControl::getRelayDescription(int8_t index)
 {
   String result = "";
   if ((index >= 0) && (index < relayCount))
@@ -461,7 +461,7 @@ String getRelayDescription(int8_t index)
   return (result);
 }
 
-void shRelayControl::setFileName(String _name)
+void shRelayControl::setFileName(const String &_name)
 {
   relayFileConfigName = _name;
 }
@@ -499,7 +499,7 @@ void shSwitchControl::init(uint8_t _switch_count)
   }
 }
 
-bool shSwitchControl::addRelay(String relay_name,
+bool shSwitchControl::addRelay(const String &relay_name,
                                srButton *relay_button)
 {
   bool result = false;
@@ -716,7 +716,7 @@ void shSwitchControl::findRelays()
   find_remote_relays();
 }
 
-void shSwitchControl::setModuleDescription(String _descr)
+void shSwitchControl::setModuleDescription(const String &_descr)
 {
   module_description = _descr;
 }
@@ -744,7 +744,7 @@ String shSwitchControl::getRelayName(int8_t index)
   return (result);
 }
 
-void shSwitchControl::setFileName(String _name)
+void shSwitchControl::setFileName(const String &_name)
 {
   switchFileConfigName = _name;
 }
@@ -786,7 +786,7 @@ static IPAddress get_broadcast_address()
   return (result);
 }
 
-static bool get_value_of_argument(String &_res, String _arg, String &_str)
+static bool get_value_of_argument(String &_res, const String &_arg, String &_str)
 {
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
@@ -839,14 +839,17 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
   return (result);
 }
 
-static String get_argument(String _res, String _arg)
+static String get_argument(String &_res, const String &_arg)
 {
   String result = "";
   get_value_of_argument(_res, _arg, result);
   return result;
 }
 
-static String get_json_string_to_send(String _name, String _descr, String _comm, String _for)
+static String get_json_string_to_send(const String &_name,
+                                      const String &_descr,
+                                      const String &_comm,
+                                      const String &_for)
 {
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
@@ -861,7 +864,7 @@ static String get_json_string_to_send(String _name, String _descr, String _comm,
   return (_res);
 }
 
-static String get_json_string_to_send(String _name, String _comm)
+static String get_json_string_to_send(const String &_name, const String &_comm)
 {
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
@@ -951,7 +954,7 @@ static void set_all_remote_relay_state(bool state)
   }
 }
 
-static void send_command_for_relay(int8_t index, String command)
+static void send_command_for_relay(int8_t index, const String &command)
 {
   if (WiFi.isConnected())
   {
@@ -1039,7 +1042,10 @@ static void handleGetConfig(String _msg)
   http_server->send(200, FPSTR(TEXT_JSON), _msg);
 }
 
-static void get_relay_data_json(JsonObject &rel, String _name, String _descr, int8_t _last)
+static void get_relay_data_json(JsonObject &rel,
+                                const String &_name,
+                                const String &_descr,
+                                const int8_t _last)
 {
   if (_last >= 0)
   {

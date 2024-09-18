@@ -101,11 +101,11 @@ public:
    * @param relay_description описание реле
    * @return true если реле добавлено успешно, иначе false
    */
-  bool addRelay(String relay_name,
+  bool addRelay(const String &relay_name,
                 uint8_t relay_pin,
                 uint8_t control_level,
                 srButton *relay_button = nullptr,
-                String relay_description = "");
+                const String &relay_description = "");
 
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
@@ -201,7 +201,7 @@ public:
    *
    * @param _descr новое описание
    */
-  void setModuleDescription(String _descr);
+  void setModuleDescription(String &_descr);
 
   /**
    * @brief получение текущего описания модуля
@@ -231,7 +231,7 @@ public:
    * @param index индекс реле в массиве
    * @param _name новое сетевое имя
    */
-  void setRelayName(int8_t index, String _name);
+  void setRelayName(int8_t index, String &_name);
 
   /**
    * @brief получение текущего сетевого имени реле
@@ -247,7 +247,7 @@ public:
    * @param index индекс реле в массиве
    * @param _descr новое описание
    */
-  void setRelayDescription(int8_t index, String _descr);
+  void setRelayDescription(int8_t index, String &_descr);
 
   /**
    * @brief получение текущего описания реле
@@ -262,7 +262,7 @@ public:
    *
    * @param _name новое имя файла
    */
-  void setFileName(String _name);
+  void setFileName(const String &_name);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
@@ -323,7 +323,7 @@ public:
    * @param relay_button кнопка, управляющая удаленным реле
    * @return true если данные добавлены успешно, иначе false
    */
-  bool addRelay(String relay_name,
+  bool addRelay(const String &relay_name,
                 srButton *relay_button = nullptr);
 
   /**
@@ -448,7 +448,7 @@ public:
    *
    * @param _descr новое описание
    */
-  void setModuleDescription(String _descr);
+  void setModuleDescription(const String &_descr);
 
   /**
    * @brief получение текущего описания модуля
@@ -478,7 +478,7 @@ public:
    *
    * @param _name новое имя файла
    */
-  void setFileName(String _name);
+  void setFileName(const String &_name);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
