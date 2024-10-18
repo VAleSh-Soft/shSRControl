@@ -15,6 +15,13 @@
 #include <Ticker.h>
 #include "srButtons.h"
 
+#if defined(ARDUINO_ARCH_ESP32)
+typedef WebServer shWebServer;
+#else
+typedef ESP8266WebServer shWebServer;
+#endif
+
+
 // описание свойств реле
 struct shRelayData
 {
@@ -134,15 +141,11 @@ public:
   /**
    * @brief подключение Web-интерфейса
    *
-   * @param _server ссылка на экземпляр Web-сервера (WebServer), с которым будет работать модуль
+   * @param _server ссылка на экземпляр Web-сервера, с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
    */
-#if defined(ARDUINO_ARCH_ESP32)
-  void attachWebInterface(WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
-#else
-  void attachWebInterface(ESP8266WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
-#endif
+  void attachWebInterface(shWebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 
   /**
    * @brief обработка событий модуля
@@ -387,11 +390,7 @@ public:
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
    */
-#if defined(ARDUINO_ARCH_ESP32)
-  void attachWebInterface(WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
-#else
-  void attachWebInterface(ESP8266WebServer *_server, FS *_file_system, String _config_page = "/relay_config");
-#endif
+  void attachWebInterface(shWebServer *_server, FS *_file_system, String _config_page = "/relay_config");
 
   /**
    * @brief обработка событий модуля

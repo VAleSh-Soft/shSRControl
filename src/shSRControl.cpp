@@ -79,11 +79,7 @@ static bool save_state_of_relay = false;
 static Print *serial = NULL;
 static bool logOnState = true;
 
-#if defined(ARDUINO_ARCH_ESP32)
 static WebServer *http_server = NULL;
-#else
-static ESP8266WebServer *http_server = NULL;
-#endif
 static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
@@ -206,15 +202,9 @@ void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
   localPort = _local_port;
 }
 
-#if defined(ARDUINO_ARCH_ESP32)
-void shRelayControl::attachWebInterface(WebServer *_server,
+void shRelayControl::attachWebInterface(shWebServer *_server,
                                         FS *_file_system,
                                         String _config_page)
-#else
-void shRelayControl::attachWebInterface(ESP8266WebServer *_server,
-                                        FS *_file_system,
-                                        String _config_page)
-#endif
 {
   http_server = _server;
   file_system = _file_system;
@@ -546,15 +536,9 @@ void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
   find_remote_relays();
 }
 
-#if defined(ARDUINO_ARCH_ESP32)
-void shSwitchControl::attachWebInterface(WebServer *_server,
+void shSwitchControl::attachWebInterface(shWebServer *_server,
                                          FS *_file_system,
                                          String _config_page)
-#else
-void shSwitchControl::attachWebInterface(ESP8266WebServer *_server,
-                                         FS *_file_system,
-                                         String _config_page)
-#endif
 {
   http_server = _server;
   file_system = _file_system;
