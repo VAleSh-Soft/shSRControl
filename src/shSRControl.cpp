@@ -79,7 +79,7 @@ static bool save_state_of_relay = false;
 static Print *serial = NULL;
 static bool logOnState = true;
 
-static WebServer *http_server = NULL;
+static shWebServer *http_server = NULL;
 static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
