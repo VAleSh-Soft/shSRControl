@@ -524,9 +524,9 @@ void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
 
 bool shSwitchControl::getErrorBuzzerState() { return (err.getState()); }
 
-void shSwitchControl::setCheckTimer(uint32_t _timer) { checkTimer = _timer; }
+void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 
-uint32_t shSwitchControl::getCheckTimer() { return (checkTimer); }
+uint32_t shSwitchControl::getCheckTimer() { return (checkInterval); }
 
 void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 {
@@ -571,10 +571,9 @@ void shSwitchControl::tick()
   }
 
   // проверка доступности реле через заданный интервал
-  static uint32_t timer = 0;
-  if (millis() - timer >= checkTimer)
+  if (millis() - checkTimer >= checkInterval)
   {
-    timer = millis();
+    checkTimer = millis();
     find_remote_relays();
   }
 

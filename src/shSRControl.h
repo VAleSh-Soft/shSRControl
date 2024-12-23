@@ -300,7 +300,8 @@ public:
 class shSwitchControl
 {
 private:
-  uint32_t checkTimer = 30000;
+  uint32_t checkInterval = 30000;
+  uint32_t checkTimer = 0;
 
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String &_res);
