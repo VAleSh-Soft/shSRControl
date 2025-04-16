@@ -131,6 +131,14 @@ public:
   bool getLogOnState();
 
   /**
+   * @brief включить/выключить озвучивание нажатия локальных кнопок
+   *
+   * @param _state новое состояние опции
+   * @param _pin пин, к которому подключен буззер
+   */
+  void setButtonBuzzerState(bool _state, int8_t _pin = -1);
+
+  /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
@@ -521,7 +529,7 @@ public:
 
   void setState(bool _state, int8_t _pin = -1);
   bool getState();
-  void startBuzzer(uint8_t _num);
+  void startBuzzer(uint8_t _num, uint16_t _freq = 500, uint32_t _dur = 50);
   void stopBuzzer();
   void bip();
   uint8_t decBipCount();

@@ -54,7 +54,11 @@ static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
 
 // константы для работы с JSON
+#if defined(ARDUINO_ARCH_ESP8266)
 static const uint16_t CONFIG_SIZE = 2048;
+#else
+static const uint16_t CONFIG_SIZE = 4096;
+#endif
 static const uint16_t RELAY_DATA_SIZE = 256;
 
 enum ModuleType : uint8_t
@@ -196,6 +200,11 @@ void shRelayControl::setLogOnState(bool _on, Print *_serial)
 
 bool shRelayControl::getLogOnState() { return (logOnState); }
 
+void shRelayControl::setButtonBuzzerState(bool _state, int8_t _pin)
+{
+  err.setState(_state, _pin);
+}
+
 void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
@@ -244,6 +253,10 @@ void shRelayControl::tick()
     if (relayArray[i].relayButton != NULL &&
         relayArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
+      if (err.getState())
+      {
+        err.startBuzzer(1, 2500); // одиночный пик на каждое нажатие любой кнопки
+      }
       switch_local_relay(i);
     }
   }
@@ -566,6 +579,10 @@ void shSwitchControl::tick()
     if (switchArray[i].relayButton != NULL &&
         switchArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
+      if (err.getState())
+      {
+        err.startBuzzer(1, 2500); // одиночный пик на каждое нажатие любой кнопки
+      }
       switch_remote_relay(i);
     }
   }
@@ -634,7 +651,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
   }
   else
   {
-    SR_PRINT(F("Skip broadcast packet "));
+    SR_PRINT(F("Skiped broadcast packet from "));
     SR_PRINTLN(udp->remoteIP());
   }
 #endif
@@ -1357,8 +1374,10 @@ bool ErrorBuzzer::getState()
   return (state);
 }
 
-void ErrorBuzzer::startBuzzer(uint8_t _num)
+void ErrorBuzzer::startBuzzer(uint8_t _num, uint16_t _freq, uint32_t _dur)
 {
+  freq = _freq;
+  dur = _dur;
   buzzer.detach();
   if (state && pin >= 0)
   {
