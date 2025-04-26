@@ -512,25 +512,29 @@ public:
   bool loadConfig();
 };
 
-// ==== ErrorBuzzer class ============================
+// ==== shBuzzer class ===============================
 
-class ErrorBuzzer
+class shBuzzer
 {
 private:
   Ticker buzzer;
-  int8_t pin = -1;
-  uint8_t bip_count = 0;
-  uint16_t freq = 500;
-  uint32_t dur = 50;
-  bool state = false;
+  int8_t buzzer_pin = -1;
+  uint8_t beep_count = 0;
+  uint16_t error_freq = 500;
+  uint32_t error_dur = 50;
+  bool buzzer_state = false;
+  uint16_t btn_beep_freq = 2500;
+  uint32_t btn_beep_dur = 50;
 
 public:
-  ErrorBuzzer();
+  shBuzzer();
 
   void setState(bool _state, int8_t _pin = -1);
   bool getState();
   void startBuzzer(uint8_t _num, uint16_t _freq = 500, uint32_t _dur = 50);
   void stopBuzzer();
-  void bip();
+  void beep();
+  void btnBeep();
+  void setBtnBeepData(uint16_t _freq, uint32_t _dur);
   uint8_t decBipCount();
 };

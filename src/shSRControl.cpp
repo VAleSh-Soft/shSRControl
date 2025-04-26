@@ -88,7 +88,7 @@ static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
 
-static ErrorBuzzer err;
+static shBuzzer bzr;
 
 // ===================================================
 
@@ -202,7 +202,7 @@ bool shRelayControl::getLogOnState() { return (logOnState); }
 
 void shRelayControl::setButtonBuzzerState(bool _state, int8_t _pin)
 {
-  err.setState(_state, _pin);
+  bzr.setState(_state, _pin);
 }
 
 void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
@@ -253,10 +253,7 @@ void shRelayControl::tick()
     if (relayArray[i].relayButton != NULL &&
         relayArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
-      if (err.getState())
-      {
-        err.startBuzzer(1, 2500); // одиночный пик на каждое нажатие любой кнопки
-      }
+      bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
       switch_local_relay(i);
     }
   }
@@ -532,10 +529,10 @@ bool shSwitchControl::getLogOnState() { return (logOnState); }
 
 void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
 {
-  err.setState(_state, _pin);
+  bzr.setState(_state, _pin);
 }
 
-bool shSwitchControl::getErrorBuzzerState() { return (err.getState()); }
+bool shSwitchControl::getErrorBuzzerState() { return (bzr.getState()); }
 
 void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 
@@ -579,10 +576,7 @@ void shSwitchControl::tick()
     if (switchArray[i].relayButton != NULL &&
         switchArray[i].relayButton->getButtonState() == BTN_DOWN)
     {
-      if (err.getState())
-      {
-        err.startBuzzer(1, 2500); // одиночный пик на каждое нажатие любой кнопки
-      }
+      bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
       switch_remote_relay(i);
     }
   }
@@ -949,7 +943,7 @@ static void set_all_remote_relay_state(bool state)
   }
   else
   {
-    err.startBuzzer(3);
+    bzr.startBuzzer(3);
     SR_PRINTLN(F("Failed to send command to remote relay, connection lost"));
   }
 }
@@ -978,7 +972,7 @@ static void send_command_for_relay(int8_t index, const String &command)
       }
       else
       {
-        err.startBuzzer(2);
+        bzr.startBuzzer(2);
         SR_PRINT(F("Relay "));
         SR_PRINT(switchArray[index].relayName);
         SR_PRINTLN(F(" not found!"));
@@ -988,7 +982,7 @@ static void send_command_for_relay(int8_t index, const String &command)
   }
   else
   {
-    err.startBuzzer(3);
+    bzr.startBuzzer(3);
     SR_PRINTLN(F("Failed to send command to remote relay, connection lost"));
   }
 }
@@ -1350,53 +1344,53 @@ static bool load_config_file(ModuleType _mdt)
   return (result);
 }
 
-// ==== ErrorBuzzer class ============================
+// ==== shBuzzer class ===============================
 
 void buzzerTick()
 {
-  err.bip();
-  if (err.decBipCount() == 0)
+  bzr.beep();
+  if (bzr.decBipCount() == 0)
   {
-    err.stopBuzzer();
+    bzr.stopBuzzer();
   }
 }
 
-ErrorBuzzer::ErrorBuzzer() {}
+shBuzzer::shBuzzer() {}
 
-void ErrorBuzzer::setState(bool _state, int8_t _pin)
+void shBuzzer::setState(bool _state, int8_t _pin)
 {
-  pin = _pin;
-  state = (pin >= 0) ? _state : false;
+  buzzer_pin = _pin;
+  buzzer_state = (buzzer_pin >= 0) ? _state : false;
 }
 
-bool ErrorBuzzer::getState()
+bool shBuzzer::getState()
 {
-  return (state);
+  return (buzzer_state);
 }
 
-void ErrorBuzzer::startBuzzer(uint8_t _num, uint16_t _freq, uint32_t _dur)
+void shBuzzer::startBuzzer(uint8_t _num, uint16_t _freq, uint32_t _dur)
 {
-  freq = _freq;
-  dur = _dur;
+  error_freq = _freq;
+  error_dur = _dur;
   buzzer.detach();
-  if (state && pin >= 0)
+  if (buzzer_state && buzzer_pin >= 0)
   {
-    bip_count = _num;
-    buzzer.attach_ms(dur * 2, buzzerTick);
+    beep_count = _num;
+    buzzer.attach_ms(error_dur * 2, buzzerTick);
     buzzerTick();
   }
 }
 
-void ErrorBuzzer::stopBuzzer()
+void shBuzzer::stopBuzzer()
 {
   buzzer.detach();
 }
 
-void ErrorBuzzer::bip()
+void shBuzzer::beep()
 {
-  if (state && pin >= 0)
+  if (buzzer_state && buzzer_pin >= 0)
   {
-    tone(pin, freq, dur);
+    tone(buzzer_pin, error_freq, error_dur);
   }
   else
   {
@@ -1404,7 +1398,18 @@ void ErrorBuzzer::bip()
   }
 }
 
-uint8_t ErrorBuzzer::decBipCount()
+void shBuzzer::btnBeep()
 {
-  return (--bip_count);
+  startBuzzer(1, btn_beep_freq, btn_beep_dur);
+}
+
+void shBuzzer::setBtnBeepData(uint16_t _freq, uint32_t _dur)
+{
+  btn_beep_freq = _freq;
+  btn_beep_dur = _dur;
+}
+
+uint8_t shBuzzer::decBipCount()
+{
+  return (--beep_count);
 }
