@@ -205,6 +205,11 @@ void shRelayControl::setButtonBuzzerState(bool _state, int8_t _pin)
   bzr.setState(_state, _pin);
 }
 
+void shRelayControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
+{
+  bzr.setBtnBeepData(_freq, _dur);
+}
+
 void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 {
   udp = _udp;
@@ -533,6 +538,12 @@ void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
 }
 
 bool shSwitchControl::getErrorBuzzerState() { return (bzr.getState()); }
+
+
+void shSwitchControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
+{
+  bzr.setBtnBeepData(_freq, _dur);
+}
 
 void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 

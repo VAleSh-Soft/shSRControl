@@ -139,6 +139,14 @@ public:
   void setButtonBuzzerState(bool _state, int8_t _pin = -1);
 
   /**
+   * @brief настройка звукового сигнала для нажатия локальных кнопок
+   * 
+   * @param _freq частота в Гц
+   * @param _dur длительность сигнала в мс
+   */
+  void setBtnBeepData(uint16_t _freq, uint32_t _dur);
+
+  /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
@@ -369,6 +377,14 @@ public:
    * @return false
    */
   bool getErrorBuzzerState();
+
+  /**
+   * @brief настройка звукового сигнала для нажатия кнопок
+   * 
+   * @param _freq частота в Гц
+   * @param _dur длительность сигнала в мс
+   */
+  void setBtnBeepData(uint16_t _freq, uint32_t _dur);
 
   /**
    * @brief установка интервала проверки доступности связанных реле в сети в милисекундах; по умолчанию установлен интервал в 30 секунд
