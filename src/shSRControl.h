@@ -101,10 +101,10 @@ public:
   /**
    * @brief добавление данных локального реле
    *
-   * @param relay_name имя реле
+   * @param relay_name имя локального реле
    * @param relay_pin пин, к которому подключено реле
    * @param control_level логический уровень, которым управляется реле (HIGH или LOW)
-   * @param relay_button локальная кнопка для управления реле
+   * @param relay_button локальная кнопка для управления реле или nullptr, если локальной кнопки нет
    * @param relay_description описание реле
    * @return true если реле добавлено успешно, иначе false
    */
@@ -339,8 +339,8 @@ public:
   /**
    * @brief добавление данных удаленного реле
    *
-   * @param relay_name имя реле
-   * @param relay_button кнопка, управляющая удаленным реле
+   * @param relay_name имя удаленного реле
+   * @param relay_button кнопка, управляющая удаленным реле или nullptr, если управляющей кнопки нет
    * @return true если данные добавлены успешно, иначе false
    */
   bool addRelay(const String &relay_name,
