@@ -19,6 +19,7 @@ static const String sr_descr_str = "descr";
 static const String sr_relays_str = "relays";
 static const String sr_module_str = "module";
 static const String sr_last_state_str = "last";
+static const String sr_ip_addr_str = "addr";
 static const String sr_save_state_str = "save_state";
 
 // ==== значения параметров в запросах ===============
@@ -129,6 +130,10 @@ static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
                                 const int8_t _last = -1);
+static void get_relay_data_json(JsonObject &rel,
+                                const String &_name,
+                                const String &_descr,
+                                const IPAddress _ip);
 static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl);
 static String get_config_json_string(ModuleType _mdl);
 
@@ -538,7 +543,6 @@ void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
 }
 
 bool shSwitchControl::getErrorBuzzerState() { return (bzr.getState()); }
-
 
 void shSwitchControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
 {
@@ -1060,6 +1064,16 @@ static void get_relay_data_json(JsonObject &rel,
   rel[sr_descr_str] = _descr;
 }
 
+static void get_relay_data_json(JsonObject &rel,
+                                const String &_name,
+                                const String &_descr,
+                                const IPAddress _ip)
+{
+  rel[sr_name_str] = _name;
+  rel[sr_descr_str] = _descr;
+  rel[sr_ip_addr_str] = _ip.toString();
+}
+
 static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
 {
   doc[sr_module_str] = module_description;
@@ -1085,7 +1099,8 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
       JsonObject rel = relays.createNestedObject();
       get_relay_data_json(rel,
                           switchArray[i].relayName,
-                          switchArray[i].relayDescription);
+                          switchArray[i].relayDescription,
+                          switchArray[i].relayAddress);
     }
     break;
   }
