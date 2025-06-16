@@ -1243,6 +1243,11 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
     {
       getStringValue(switchArray[i].relayName,
                      doc[sr_relays_str][i][sr_name_str].as<String>());
+      if (doc[sr_relays_str][i][sr_name_str].as<String>() == "")
+      {
+        doc[sr_relays_str][i][sr_descr_str] = "";
+      }
+
       getStringValue(switchArray[i].relayDescription,
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
