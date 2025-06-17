@@ -21,7 +21,6 @@ typedef WebServer shWebServer;
 typedef ESP8266WebServer shWebServer;
 #endif
 
-
 // описание свойств реле
 struct shRelayData
 {
@@ -140,7 +139,7 @@ public:
 
   /**
    * @brief настройка звукового сигнала для нажатия локальных кнопок
-   * 
+   *
    * @param _freq частота в Гц
    * @param _dur длительность сигнала в мс
    */
@@ -159,9 +158,13 @@ public:
    *
    * @param _server ссылка на экземпляр Web-сервера, с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
+   * @param _relay_config_page адрес, по которому будет вызываться Web-страница конфигурации реле
+   * @param _wifi_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    */
-  void attachWebInterface(shWebServer *_server, FS *_file_system, String _config_page = "/relay_config");
+  void attachWebInterface(shWebServer *_server,
+                          FS *_file_system,
+                          const String &_relay_config_page = "/relay_config",
+                          const String &_wifi_config_page = "");
 
   /**
    * @brief обработка событий модуля
@@ -380,7 +383,7 @@ public:
 
   /**
    * @brief настройка звукового сигнала для нажатия кнопок
-   * 
+   *
    * @param _freq частота в Гц
    * @param _dur длительность сигнала в мс
    */
@@ -413,9 +416,13 @@ public:
    *
    * @param _server ссылка на экземпляр Web-сервера (WebServer), с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _config_page адрес, по которому будет вызываться Web-страница конфигурации
+   * @param _relay_config_page адрес, по которому будет вызываться Web-страница конфигурации реле
+   * @param _wifi_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    */
-  void attachWebInterface(shWebServer *_server, FS *_file_system, String _config_page = "/relay_config");
+  void attachWebInterface(shWebServer *_server,
+                          FS *_file_system,
+                          const String &_relay_config_page = "/relay_config",
+                          const String &_wifi_config_page = "");
 
   /**
    * @brief обработка событий модуля

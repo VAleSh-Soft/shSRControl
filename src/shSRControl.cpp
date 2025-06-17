@@ -10,7 +10,7 @@
   if (logOnState && serial) \
   serial->println(x)
 
-// ==== имена параметров в запросах ==================
+// ==== имена параметров в запросах/ответах ==========
 static const String sr_name_str = "name";
 static const String sr_command_str = "command";
 static const String sr_response_str = "resp";
@@ -20,9 +20,11 @@ static const String sr_relays_str = "relays";
 static const String sr_module_str = "module";
 static const String sr_last_state_str = "last";
 static const String sr_ip_addr_str = "addr";
+static const String sr_wificonf_str = "wificonf";
+static const String sr_relayconf_str = "relconf";
 static const String sr_save_state_str = "save_state";
 
-// ==== значения параметров в запросах ===============
+// ==== значения параметров в запросах/ответах =======
 static const String sr_ok_str = "ok";
 static const String sr_no_str = "no";
 static const String sr_on_str = "on";
@@ -90,6 +92,9 @@ static WiFiUDP *udp = NULL;
 static uint16_t localPort = 0;
 
 static shBuzzer bzr;
+
+static String wifi_config_page = "";
+static String relay_config_page = "";
 
 // ===================================================
 
@@ -223,7 +228,8 @@ void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 
 void shRelayControl::attachWebInterface(shWebServer *_server,
                                         FS *_file_system,
-                                        String _config_page)
+                                        const String &_relay_config_page,
+                                        const String &_wifi_config_page)
 {
   http_server = _server;
   file_system = _file_system;
@@ -240,11 +246,23 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
     }
   }
 
+  relay_config_page = _relay_config_page;
+  wifi_config_page = _wifi_config_page;
+
+  if (relay_config_page.indexOf("/") != 0)
+  {
+    relay_config_page = "/" + relay_config_page;
+  }
+  if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
+  {
+    wifi_config_page = "/" + wifi_config_page;
+  }
+
   if (http_server)
   { // вызов стартовой страницы модуля реле
     http_server->on("/", HTTP_GET, handleGetRelayIndexPage);
     // вызов страницы настройки модуля реле
-    http_server->on(_config_page, HTTP_GET, handleGetRelayConfigPage);
+    http_server->on(relay_config_page, HTTP_GET, handleGetRelayConfigPage);
     // запрос текущих настроек
     http_server->on(FPSTR(RELAY_GET_CONFIG), HTTP_GET, handleGetRelayConfig);
     // сохранение настроек
@@ -563,10 +581,23 @@ void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
 
 void shSwitchControl::attachWebInterface(shWebServer *_server,
                                          FS *_file_system,
-                                         String _config_page)
+                                         const String &_relay_config_page,
+                                         const String &_wifi_config_page)
 {
   http_server = _server;
   file_system = _file_system;
+
+  relay_config_page = _relay_config_page;
+  wifi_config_page = _wifi_config_page;
+
+  if (relay_config_page.indexOf("/") != 0)
+  {
+    relay_config_page = "/" + relay_config_page;
+  }
+  if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
+  {
+    wifi_config_page = "/" + wifi_config_page;
+  }
 
   load_config_file(mtSwitch);
 
@@ -574,7 +605,7 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
   { // вызов стартовой страницы модуля выключателя
     http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
     // вызов страницы настройки модуля выключателей
-    http_server->on(_config_page, HTTP_GET, handleGetSwitchConfigPage);
+    http_server->on(_relay_config_page, HTTP_GET, handleGetSwitchConfigPage);
     // запрос текущих настроек
     http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
     // сохранение настроек
@@ -1094,6 +1125,9 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
     break;
   case mtSwitch:
     doc[sr_for_str] = sr_switch_str;
+    doc[sr_wificonf_str] = wifi_config_page;
+    doc[sr_relayconf_str] = relay_config_page;
+
     for (int8_t i = 0; i < switchCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
