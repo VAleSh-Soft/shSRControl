@@ -1109,11 +1109,15 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
 {
   doc[sr_module_str] = module_description;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
+  doc[sr_wificonf_str] = wifi_config_page;
+  doc[sr_relayconf_str] = relay_config_page;
+
   switch (_mdl)
   {
   case mtRelay:
     doc[sr_for_str] = sr_relay_str;
     doc[sr_save_state_str] = (byte)save_state_of_relay;
+    
     for (int8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
@@ -1125,8 +1129,6 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
     break;
   case mtSwitch:
     doc[sr_for_str] = sr_switch_str;
-    doc[sr_wificonf_str] = wifi_config_page;
-    doc[sr_relayconf_str] = relay_config_page;
 
     for (int8_t i = 0; i < switchCount; i++)
     {
