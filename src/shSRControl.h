@@ -21,6 +21,8 @@ typedef WebServer shWebServer;
 typedef ESP8266WebServer shWebServer;
 #endif
 
+#define DEFAULT_UDP_PORT 54321
+
 // описание свойств реле
 struct shRelayData
 {
@@ -81,7 +83,7 @@ class shRelayControl
 private:
   void respondToRelayCheck(int8_t index);
   void receiveUdpPacket(int _size);
-  int8_t getRelayIndexByName(String &_res);
+  int8_t getRelayIndexByName(String _name);
 
 public:
   /**
@@ -151,7 +153,7 @@ public:
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _local_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
    */
-  void startDevice(WiFiUDP *_udp, uint16_t _local_port);
+  void startDevice(WiFiUDP *_udp, uint16_t _local_port = DEFAULT_UDP_PORT);
 
   /**
    * @brief подключение Web-интерфейса
@@ -323,7 +325,7 @@ private:
   uint32_t checkTimer = 0;
 
   void receiveUdpPacket(int _size);
-  int8_t getRelayIndexByName(String &_res);
+  int8_t getRelayIndexByName(String _name);
 
 public:
   /**
@@ -409,7 +411,7 @@ public:
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _local_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
    */
-  void startDevice(WiFiUDP *_udp, uint16_t _local_port);
+  void startDevice(WiFiUDP *_udp, uint16_t _local_port = DEFAULT_UDP_PORT);
 
   /**
    * @brief подключение Web-интерфейса

@@ -1,4 +1,5 @@
 #include "shSRControl.h"
+#include <new>
 #include <ArduinoJson.h>
 #include "extras/c_page.h"
 #include "extras/i_page.h"
@@ -16,6 +17,7 @@ static const String sr_command_str = "command";
 static const String sr_response_str = "resp";
 static const String sr_for_str = "for";
 static const String sr_descr_str = "descr";
+static const String sr_type_str = "type";
 static const String sr_relays_str = "relays";
 static const String sr_module_str = "module";
 static const String sr_last_state_str = "last";
@@ -35,6 +37,8 @@ static const String sr_set_on_str = "set_on";
 static const String sr_set_off_str = "set_off";
 static const String sr_respond_str = "respond";
 static const String sr_any_str = "any_relay";
+static const String sr_relay_module_str = "r_module";
+static const String sr_switch_module_str = "s_module";
 
 /*
 строка запроса от выключателя - имя реле и команда: отозваться, если идет поиск, или выполнить команду
@@ -81,6 +85,7 @@ static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
 
 static String module_description = "";
+static String module_name = "switch";
 static bool save_state_of_relay = false;
 
 static Print *serial = NULL;
@@ -104,6 +109,7 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
 static String get_argument(String &_res, const String &_arg);
 static String get_json_string_to_send(const String &_name, const String &_comm);
 static String get_json_string_to_send(const String &_name,
+                                      const String &_type,
                                       const String &_descr,
                                       const String &_comm,
                                       const String &_for);
@@ -162,13 +168,19 @@ shRelayControl::shRelayControl() {}
 
 void shRelayControl::init(uint8_t _relay_count)
 {
-  relayArray = new shRelayData[_relay_count];
+  // защита от утечки памяти при повторном вызове init()
+  if (relayArray)
+  {
+    delete[] relayArray;
+  }
+
+  relayArray = new (std::nothrow) shRelayData[_relay_count];
   if (relayArray)
   {
     relayCount = _relay_count;
   }
 
-  if (&Serial != NULL)
+  if (Serial != NULL)
   {
     serial = &Serial;
   }
@@ -286,13 +298,19 @@ void shRelayControl::tick()
     }
   }
 
-  int packet_size = udp->parsePacket();
-  if (packet_size > 0)
+  if (udp != NULL)
   {
-    receiveUdpPacket(packet_size);
+    int packet_size = udp->parsePacket();
+    if (packet_size > 0)
+    {
+      receiveUdpPacket(packet_size);
+    }
   }
 
-  http_server->handleClient();
+  if (http_server)
+  {
+    http_server->handleClient();
+  }
   delay(1);
 }
 
@@ -301,6 +319,7 @@ void shRelayControl::respondToRelayCheck(int8_t index)
   if ((index >= 0) && (index < relayCount))
   {
     String s = get_json_string_to_send(relayArray[index].relayName,
+                                       sr_relay_module_str,
                                        relayArray[index].relayDescription,
                                        sr_ok_str,
                                        sr_respond_str);
@@ -325,6 +344,7 @@ void set_state(int8_t relay_index, String comm)
     }
 
     String s = get_json_string_to_send(relayArray[relay_index].relayName,
+                                       sr_relay_module_str,
                                        relayArray[relay_index].relayDescription,
                                        get_relay_state(relay_index),
                                        comm);
@@ -337,11 +357,17 @@ void shRelayControl::receiveUdpPacket(int _size)
   char _str[_size + 1] = {0};
 
   udp->read(_str, _size);
+#if defined(ARDUINO_ARCH_ESP8266)
   udp->flush();
+#else
+  udp->clear();
+#endif
 
   String _resp = String(_str);
   String comm = get_argument(_resp, sr_command_str);
   String r_name = get_argument(_resp, sr_name_str);
+
+  // если получен запрос на отклик
   if (comm == sr_respond_str)
   {
     if (r_name == sr_any_str)
@@ -356,10 +382,12 @@ void shRelayControl::receiveUdpPacket(int _size)
       respondToRelayCheck(getRelayIndexByName(r_name));
     }
   }
+  // иначе выполнить команду на переключение реле
   else if ((comm == sr_switch_str) ||
            (comm == sr_set_on_str) ||
            (comm == sr_set_off_str))
   {
+    // всех сразу
     if (r_name == sr_any_str)
     {
       for (uint8_t i = 0; i < relayCount; i++)
@@ -367,15 +395,17 @@ void shRelayControl::receiveUdpPacket(int _size)
         set_state(i, comm);
       }
     }
+    // конкретного реле
     else
     {
-      set_state(getRelayIndexByName(_resp), comm);
+      set_state(getRelayIndexByName(get_argument(_resp, sr_name_str)), comm);
     }
   }
   else
   {
     // ответ о неизвестной команде
     String s = get_json_string_to_send(WiFi.localIP().toString(),
+                                       sr_relay_module_str,
                                        module_description,
                                        F("unknown command"),
                                        comm);
@@ -383,15 +413,14 @@ void shRelayControl::receiveUdpPacket(int _size)
   }
 }
 
-int8_t shRelayControl::getRelayIndexByName(String &_res)
+int8_t shRelayControl::getRelayIndexByName(String _name)
 {
   int8_t result = -1;
-  String name = get_argument(_res, sr_name_str);
-  if (name.length() > 0)
+  if (_name.length() > 0)
   {
     for (int8_t i = 0; i < relayCount; i++)
     {
-      if (relayArray[i].relayName == name)
+      if (relayArray[i].relayName == _name)
       {
         result = i;
         break;
@@ -515,13 +544,19 @@ shSwitchControl::shSwitchControl() {}
 
 void shSwitchControl::init(uint8_t _switch_count)
 {
-  switchArray = new shSwitchData[_switch_count];
+  // защита от утечки памяти при повторном вызове init()
+  if (switchArray)
+  {
+    delete[] switchArray;
+  }
+
+  switchArray = new (std::nothrow) shSwitchData[_switch_count];
   if (switchArray)
   {
     switchCount = _switch_count;
   }
 
-  if (&Serial != NULL)
+  if (Serial != NULL)
   {
     serial = &Serial;
   }
@@ -605,7 +640,7 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
   { // вызов стартовой страницы модуля выключателя
     http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
     // вызов страницы настройки модуля выключателей
-    http_server->on(_relay_config_page, HTTP_GET, handleGetSwitchConfigPage);
+    http_server->on(relay_config_page, HTTP_GET, handleGetSwitchConfigPage);
     // запрос текущих настроек
     http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
     // сохранение настроек
@@ -634,78 +669,100 @@ void shSwitchControl::tick()
     find_remote_relays();
   }
 
-  int packet_size = udp->parsePacket();
-  if (packet_size > 0)
+  if (udp != NULL)
   {
-    receiveUdpPacket(packet_size);
+    int packet_size = udp->parsePacket();
+    if (packet_size > 0)
+    {
+      receiveUdpPacket(packet_size);
+    }
   }
 
-  http_server->handleClient();
+  if (http_server)
+  {
+    http_server->handleClient();
+  }
   delay(1);
 }
 
 void shSwitchControl::receiveUdpPacket(int _size)
 {
   char _str[_size + 1] = {0};
+
   udp->read(_str, _size);
+#if defined(ARDUINO_ARCH_ESP8266)
   udp->flush();
+#else
+  udp->clear();
+#endif
 
   String _resp = String(_str);
+
+  String arg_for = get_argument(_resp, sr_for_str);
+  String arg_name = get_argument(_resp, sr_name_str);
+  String arg_command = get_argument(_resp, sr_command_str);
+
 #if defined(ARDUINO_ARCH_ESP8266)
-  if ((udp->destinationIP() != get_broadcast_address()))
-  {
+  if (udp->destinationIP() != get_broadcast_address() && arg_command == sr_respond_str)
+#else
+  if (arg_name == sr_any_str && arg_command == sr_respond_str)
 #endif
-    int8_t relay_index = getRelayIndexByName(_resp);
-    if (relay_index >= 0)
+  // если получен запрос на отклик
+  {
+    SR_PRINT(module_name);
+    SR_PRINT(F(": request received, response - "));
+    SR_PRINTLN(sr_ok_str);
+    String str = get_json_string_to_send(module_name,
+                                         sr_switch_module_str,
+                                         module_description,
+                                         sr_ok_str,
+                                         sr_respond_str);
+    send_udp_packet(udp->remoteIP(), str.c_str(), str.length());
+    return;
+  }
+
+  // иначе обработать ответ реле на посланную команду
+  int8_t relay_index = getRelayIndexByName(arg_name);
+  if (relay_index >= 0)
+  {
+    switchArray[relay_index].relayFound = true;
+    if (arg_for == sr_respond_str)
     {
-      switchArray[relay_index].relayFound = true;
-      String arg_for = get_argument(_resp, sr_for_str);
-      if (arg_for == sr_respond_str)
-      {
-        switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
-        switchArray[relay_index].relayAddress = udp->remoteIP();
-        SR_PRINT(switchArray[relay_index].relayName);
-        SR_PRINT(F(" found, IP address: "));
-        SR_PRINTLN(switchArray[relay_index].relayAddress);
-      }
-      else if (arg_for == sr_switch_str ||
-               arg_for == sr_set_on_str ||
-               arg_for == sr_set_off_str)
-      {
-        SR_PRINT(switchArray[relay_index].relayName);
-        SR_PRINT(F(" response - "));
-        SR_PRINTLN(get_argument(_resp, sr_response_str));
-      }
+      switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
+      switchArray[relay_index].relayAddress = udp->remoteIP();
+      SR_PRINT(switchArray[relay_index].relayName);
+      SR_PRINT(F(" found, IP address: "));
+      SR_PRINTLN(switchArray[relay_index].relayAddress);
     }
-    else
+    else if (arg_for == sr_switch_str ||
+             arg_for == sr_set_on_str ||
+             arg_for == sr_set_off_str)
     {
-      // ответ на случай, если имя ответившего реле модулю неизвестно
-      SR_PRINT(F("Module "));
-      SR_PRINT(get_argument(_resp, sr_name_str));
-      SR_PRINT(F(", "));
-      SR_PRINT(get_argument(_resp, sr_descr_str));
+      SR_PRINT(switchArray[relay_index].relayName);
       SR_PRINT(F(" response - "));
       SR_PRINTLN(get_argument(_resp, sr_response_str));
     }
-#if defined(ARDUINO_ARCH_ESP8266)
   }
   else
   {
-    SR_PRINT(F("Skiped broadcast packet from "));
-    SR_PRINTLN(udp->remoteIP());
+    // ответ на случай, если имя ответившего реле модулю неизвестно
+    SR_PRINT(F("Module "));
+    SR_PRINT(arg_name);
+    SR_PRINT(F(", "));
+    SR_PRINT(get_argument(_resp, sr_descr_str));
+    SR_PRINT(F("; response - "));
+    SR_PRINTLN(get_argument(_resp, sr_response_str));
   }
-#endif
 }
 
-int8_t shSwitchControl::getRelayIndexByName(String &_res)
+int8_t shSwitchControl::getRelayIndexByName(String _name)
 {
   int8_t result = -1;
-  String name = get_argument(_res, sr_name_str);
-  if (name.length() > 0)
+  if (_name.length() > 0)
   {
     for (int8_t i = 0; i < switchCount; i++)
     {
-      if (switchArray[i].relayName == name)
+      if (switchArray[i].relayName == _name)
       {
         result = i;
         break;
@@ -856,12 +913,12 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
 
   if (result)
   {
-    uint8_t *_buf = new uint8_t[bufSize];
+    uint8_t *_buf = new (std::nothrow) uint8_t[bufSize];
     result = (_buf != NULL);
     if (result)
     {
       memcpy(_buf, buf, bufSize);
-      udp->write(_buf, bufSize);
+      udp->write(_buf, bufSize) == bufSize;
       delete[] _buf;
 
       result = udp->endPacket() == 1;
@@ -887,6 +944,7 @@ static String get_argument(String &_res, const String &_arg)
 }
 
 static String get_json_string_to_send(const String &_name,
+                                      const String &_type,
                                       const String &_descr,
                                       const String &_comm,
                                       const String &_for)
@@ -894,6 +952,7 @@ static String get_json_string_to_send(const String &_name,
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
   doc[sr_name_str] = _name;
+  doc[sr_type_str] = _type;
   doc[sr_descr_str] = _descr;
   doc[sr_for_str] = _for;
   doc[sr_response_str] = _comm;
@@ -1035,7 +1094,7 @@ static void send_command_for_relay(int8_t index, const String &command)
 
 static void find_remote_relays()
 {
-  for (uint8_t i = 0; i < relayCount; i++)
+  for (uint8_t i = 0; i < switchCount; i++)
   {
     switchArray[i].relayFound = false;
   }
@@ -1043,7 +1102,7 @@ static void find_remote_relays()
   IPAddress broadcastAddress = get_broadcast_address();
 
   String s = get_json_string_to_send(sr_any_str, sr_respond_str);
-  SR_PRINTLN(F("Sending a request to check IP addresses of relays"));
+  SR_PRINTLN(F("Sending a request to verify the IP addresses of remote relays"));
   SR_PRINT(F("Broadcast address: "));
   SR_PRINTLN(broadcastAddress);
   send_udp_packet(broadcastAddress, s.c_str(), s.length());
@@ -1117,7 +1176,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
   case mtRelay:
     doc[sr_for_str] = sr_relay_str;
     doc[sr_save_state_str] = (byte)save_state_of_relay;
-    
+
     for (int8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
@@ -1198,6 +1257,7 @@ static void handleSetConfig()
     {
       load_setting(mtSwitch, doc);
       save_config_file(mtSwitch, doc);
+      find_remote_relays();
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
