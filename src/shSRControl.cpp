@@ -94,7 +94,7 @@ static bool logOnState = true;
 static shWebServer *http_server = NULL;
 static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
-static uint16_t localPort = 0;
+static uint16_t udpPort = 0;
 
 static shBuzzer bzr;
 
@@ -124,6 +124,9 @@ static void set_all_remote_relay_state(bool state);
 static void send_command_for_relay(int8_t index, const String &command);
 
 static void find_remote_relays();
+
+static void set_udp_port(uint16_t _udp_port);
+static uint16_t get_udp_port();
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -204,14 +207,25 @@ bool shRelayControl::addRelay(const String &relay_name,
                                     control_level,
                                     relay_button,
                                     relay_description);
-        digitalWrite(relay_pin, !control_level);
         pinMode(relay_pin, OUTPUT);
+        digitalWrite(relay_pin, !control_level);
+        Serial.println(digitalRead(relayArray[i].relayPin));
         result = true;
         break;
       }
     }
   }
   return (result);
+}
+
+void shRelayControl::setUdpPort(uint16_t _udp_port)
+{
+  set_udp_port(_udp_port);
+}
+
+uint16_t shRelayControl::getUdpPort()
+{
+  return (get_udp_port());
 }
 
 void shRelayControl::setLogOnState(bool _on, Print *_serial)
@@ -232,10 +246,10 @@ void shRelayControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
   bzr.setBtnBeepData(_freq, _dur);
 }
 
-void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
+void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
 {
   udp = _udp;
-  localPort = _local_port;
+  udpPort = _udp_port;
 }
 
 void shRelayControl::attachWebInterface(shWebServer *_server,
@@ -316,6 +330,12 @@ void shRelayControl::tick()
 
 void shRelayControl::respondToRelayCheck(int8_t index)
 {
+  if (udp == NULL)
+  {
+    SR_PRINTLN(F("The packet could not be sent; no UDP object was specified."));
+    return;
+  }
+
   if ((index >= 0) && (index < relayCount))
   {
     String s = get_json_string_to_send(relayArray[index].relayName,
@@ -364,13 +384,13 @@ void shRelayControl::receiveUdpPacket(int _size)
 #endif
 
   String _resp = String(_str);
-  String comm = get_argument(_resp, sr_command_str);
-  String r_name = get_argument(_resp, sr_name_str);
+  String arg_comm = get_argument(_resp, sr_command_str);
+  String arg_name = get_argument(_resp, sr_name_str);
 
   // если получен запрос на отклик
-  if (comm == sr_respond_str)
+  if (arg_comm == sr_respond_str)
   {
-    if (r_name == sr_any_str)
+    if (arg_name == sr_any_str)
     {
       for (uint8_t i = 0; i < relayCount; i++)
       {
@@ -379,37 +399,40 @@ void shRelayControl::receiveUdpPacket(int _size)
     }
     else
     {
-      respondToRelayCheck(getRelayIndexByName(r_name));
+      respondToRelayCheck(getRelayIndexByName(arg_name));
     }
   }
   // иначе выполнить команду на переключение реле
-  else if ((comm == sr_switch_str) ||
-           (comm == sr_set_on_str) ||
-           (comm == sr_set_off_str))
-  {
-    // всех сразу
-    if (r_name == sr_any_str)
-    {
-      for (uint8_t i = 0; i < relayCount; i++)
-      {
-        set_state(i, comm);
-      }
-    }
-    // конкретного реле
-    else
-    {
-      set_state(getRelayIndexByName(get_argument(_resp, sr_name_str)), comm);
-    }
-  }
   else
   {
-    // ответ о неизвестной команде
-    String s = get_json_string_to_send(WiFi.localIP().toString(),
-                                       sr_relay_module_str,
-                                       module_description,
-                                       F("unknown command"),
-                                       comm);
-    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+    if ((arg_comm == sr_switch_str) ||
+        (arg_comm == sr_set_on_str) ||
+        (arg_comm == sr_set_off_str))
+    {
+      // всех сразу
+      if (arg_name == sr_any_str)
+      {
+        for (uint8_t i = 0; i < relayCount; i++)
+        {
+          set_state(i, arg_comm);
+        }
+      }
+      // конкретного реле
+      else
+      {
+        set_state(getRelayIndexByName(get_argument(_resp, sr_name_str)), arg_comm);
+      }
+    }
+    else
+    {
+      // ответ о неизвестной команде
+      String s = get_json_string_to_send(WiFi.localIP().toString(),
+                                         sr_relay_module_str,
+                                         module_description,
+                                         F("unknown command"),
+                                         arg_comm);
+      send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+    }
   }
 }
 
@@ -582,6 +605,16 @@ bool shSwitchControl::addRelay(const String &relay_name,
   return (result);
 }
 
+void shSwitchControl::setUdpPort(uint16_t _udp_port)
+{
+  set_udp_port(_udp_port);
+}
+
+uint16_t shSwitchControl::getUdpPort()
+{
+  return (get_udp_port());
+}
+
 void shSwitchControl::setLogOnState(bool _on, Print *_serial)
 {
   logOnState = _on;
@@ -606,10 +639,10 @@ void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 
 uint32_t shSwitchControl::getCheckTimer() { return (checkInterval); }
 
-void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _local_port)
+void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
 {
   udp = _udp;
-  localPort = _local_port;
+  udpPort = _udp_port;
   // выполнить первичный поиск привязанных реле
   find_remote_relays();
 }
@@ -721,37 +754,40 @@ void shSwitchControl::receiveUdpPacket(int _size)
     return;
   }
 
-  // иначе обработать ответ реле на посланную команду
-  int8_t relay_index = getRelayIndexByName(arg_name);
-  if (relay_index >= 0)
-  {
-    switchArray[relay_index].relayFound = true;
-    if (arg_for == sr_respond_str)
+  // далее работаем только с пакетами от модулей реле
+  if (get_argument(_resp, sr_type_str) == sr_relay_module_str)
+  { // иначе обработать ответ реле на посланную команду
+    int8_t relay_index = getRelayIndexByName(arg_name);
+    if (relay_index >= 0)
     {
-      switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
-      switchArray[relay_index].relayAddress = udp->remoteIP();
-      SR_PRINT(switchArray[relay_index].relayName);
-      SR_PRINT(F(" found, IP address: "));
-      SR_PRINTLN(switchArray[relay_index].relayAddress);
+      switchArray[relay_index].relayFound = true;
+      if (arg_for == sr_respond_str)
+      {
+        switchArray[relay_index].relayDescription = get_argument(_resp, sr_descr_str);
+        switchArray[relay_index].relayAddress = udp->remoteIP();
+        SR_PRINT(switchArray[relay_index].relayName);
+        SR_PRINT(F(" found, IP address: "));
+        SR_PRINTLN(switchArray[relay_index].relayAddress);
+      }
+      else if (arg_for == sr_switch_str ||
+               arg_for == sr_set_on_str ||
+               arg_for == sr_set_off_str)
+      {
+        SR_PRINT(switchArray[relay_index].relayName);
+        SR_PRINT(F(" response - "));
+        SR_PRINTLN(get_argument(_resp, sr_response_str));
+      }
     }
-    else if (arg_for == sr_switch_str ||
-             arg_for == sr_set_on_str ||
-             arg_for == sr_set_off_str)
+    else
     {
-      SR_PRINT(switchArray[relay_index].relayName);
-      SR_PRINT(F(" response - "));
+      // ответ на случай, если имя ответившего реле модулю неизвестно
+      SR_PRINT(F("Module "));
+      SR_PRINT(arg_name);
+      SR_PRINT(F(", "));
+      SR_PRINT(get_argument(_resp, sr_descr_str));
+      SR_PRINT(F("; response - "));
       SR_PRINTLN(get_argument(_resp, sr_response_str));
     }
-  }
-  else
-  {
-    // ответ на случай, если имя ответившего реле модулю неизвестно
-    SR_PRINT(F("Module "));
-    SR_PRINT(arg_name);
-    SR_PRINT(F(", "));
-    SR_PRINT(get_argument(_resp, sr_descr_str));
-    SR_PRINT(F("; response - "));
-    SR_PRINTLN(get_argument(_resp, sr_response_str));
   }
 }
 
@@ -891,7 +927,7 @@ static bool get_value_of_argument(String &_res, const String &_arg, String &_str
   bool result = !error;
   if (result)
   {
-    result = doc[_arg].as<String>() != "null";
+    result = doc[_arg].as<String>() != "NULL";
   }
   else
   {
@@ -909,8 +945,7 @@ static bool get_value_of_argument(String &_res, const String &_arg, String &_str
 
 static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize)
 {
-  bool result = udp->beginPacket(address, localPort);
-
+  bool result = (udp != NULL) ? udp->beginPacket(address, udpPort) : false;
   if (result)
   {
     uint8_t *_buf = new (std::nothrow) uint8_t[bufSize];
@@ -930,7 +965,7 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
     SR_PRINT(F("Error sending UDP packet for IP "));
     SR_PRINT(address);
     SR_PRINT(F(", remote port: "));
-    SR_PRINTLN((String)localPort);
+    SR_PRINTLN((String)udpPort);
   }
 
   return (result);
@@ -1108,6 +1143,21 @@ static void find_remote_relays()
   send_udp_packet(broadcastAddress, s.c_str(), s.length());
 }
 
+static void set_udp_port(uint16_t _udp_port)
+{
+  udpPort = _udp_port;
+  if (udp != NULL)
+  {
+    udp->stop();
+    udp->begin(udpPort);
+  }
+}
+
+static uint16_t get_udp_port()
+{
+  return ((udp != NULL) ? udpPort : 0);
+}
+
 // ==== реакции сервера ==============================
 static void handleGetConfigPage(String arg, String page)
 {
@@ -1224,7 +1274,7 @@ static void handleGetSwitchConfig()
 
 static void getStringValue(String &_var, String _val)
 {
-  _var = (_val != "null") ? _val : "";
+  _var = (_val != "NULL") ? _val : "";
 }
 
 static void handleSetConfig()

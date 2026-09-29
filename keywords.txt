@@ -22,6 +22,8 @@ getErrorBuzzerState	KEYWORD2
 setButtonBuzzerState	KEYWORD2
 setBtnBeepData	KEYWORD2
 init	KEYWORD2
+setUdpPort	KEYWORD2
+getUdpPort	KEYWORD2
 addRelay	KEYWORD2
 startDevice	KEYWORD2
 attachWebInterface	KEYWORD2
