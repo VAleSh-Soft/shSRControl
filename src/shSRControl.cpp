@@ -19,7 +19,10 @@ static const String sr_for_str = "for";
 static const String sr_descr_str = "descr";
 static const String sr_type_str = "type";
 static const String sr_relays_str = "relays";
-static const String sr_module_str = "module";
+static const String sr_module_description_str = "module_descr";
+static const String sr_module_name_str = "module_name";
+static const String sr_udp_port_str = "udp_port";
+static const String sr_check_interval_str = "check_int";
 static const String sr_last_state_str = "last";
 static const String sr_ip_addr_str = "addr";
 static const String sr_wificonf_str = "wificonf";
@@ -56,6 +59,7 @@ static const char TEXT_JSON[] PROGMEM = "text/json";
 static const char RELAY_GET_CONFIG[] PROGMEM = "/relay_getconfig";
 static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
 static const char SR_SET_CONFIG[] PROGMEM = "/sr_setconfig";
+static const char SR_RESTART[] PROGMEM = "/sr_restart";
 static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
 static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
@@ -83,9 +87,10 @@ static String relayFileConfigName = "/relay.json";
 static shSwitchData *switchArray = NULL;
 static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
+static uint32_t checkInterval = 60000;
 
 static String module_description = "";
-static String module_name = "switch";
+static String module_name = "";
 static bool save_state_of_relay = false;
 
 static Print *serial = NULL;
@@ -94,7 +99,7 @@ static bool logOnState = true;
 static shWebServer *http_server = NULL;
 static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
-static uint16_t udpPort = 0;
+static uint16_t udpPort = DEFAULT_UDP_PORT;
 
 static shBuzzer bzr;
 
@@ -127,6 +132,7 @@ static void find_remote_relays();
 
 static void set_udp_port(uint16_t _udp_port);
 static uint16_t get_udp_port();
+static uint8_t udp_restart();
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -156,6 +162,8 @@ static void handleSetConfig();
 static void handleRelaySwitch();
 static void handleRemoteRelaySwitch();
 static void handleGetRelayState();
+
+static void handleRestartModule();
 
 // ===================================================
 static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc);
@@ -297,6 +305,8 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
     http_server->on(FPSTR(RELAY_SWITCH), HTTP_POST, handleRelaySwitch);
     // запрос текущего состояния всех реле
     http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
+    // перезагрузка модуля
+    http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
   }
 }
 
@@ -494,6 +504,16 @@ String shRelayControl::getModuleDescription()
   return (module_description);
 }
 
+void shRelayControl::setModuleName(const String &_name)
+{
+  module_name = _name;
+}
+
+String shRelayControl::getModuleName()
+{
+  return (module_name);
+}
+
 void shRelayControl::setSaveStateOfRelay(bool _state)
 {
   save_state_of_relay = _state;
@@ -680,6 +700,8 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
     http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
     // переключение реле
     http_server->on(FPSTR(REMOTE_RELAY_SWITCH), HTTP_POST, handleRemoteRelaySwitch);
+    // перезагрузка модуля
+    http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
   }
 }
 
@@ -696,7 +718,8 @@ void shSwitchControl::tick()
   }
 
   // проверка доступности реле через заданный интервал
-  if (millis() - checkTimer >= checkInterval)
+  static unsigned long checkTimer = 0;
+  if (checkInterval > 0 && millis() - checkTimer >= checkInterval)
   {
     checkTimer = millis();
     find_remote_relays();
@@ -857,6 +880,16 @@ void shSwitchControl::setModuleDescription(const String &_descr)
 String shSwitchControl::getModuleDescription()
 {
   return (module_description);
+}
+
+void shSwitchControl::setModuleName(const String &_name)
+{
+  module_name = _name;
+}
+
+String shSwitchControl::getModuleName()
+{
+  return (module_name);
 }
 
 void shSwitchControl::setRelayName(int8_t index, String _name)
@@ -1146,16 +1179,22 @@ static void find_remote_relays()
 static void set_udp_port(uint16_t _udp_port)
 {
   udpPort = _udp_port;
-  if (udp != NULL)
-  {
-    udp->stop();
-    udp->begin(udpPort);
-  }
 }
 
 static uint16_t get_udp_port()
 {
-  return ((udp != NULL) ? udpPort : 0);
+  return udpPort;
+  // return ((udp != NULL) ? udpPort : 0);
+}
+
+static uint8_t udp_restart()
+{
+  if (udp != NULL)
+  {
+    udp->stop();
+    return (udp->begin(udpPort));
+  }
+  return 0;
 }
 
 // ==== реакции сервера ==============================
@@ -1216,7 +1255,9 @@ static void get_relay_data_json(JsonObject &rel,
 
 static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
 {
-  doc[sr_module_str] = module_description;
+  doc[sr_module_description_str] = module_description;
+  doc[sr_module_name_str] = module_name;
+  doc[sr_udp_port_str] = udpPort;
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   doc[sr_wificonf_str] = wifi_config_page;
   doc[sr_relayconf_str] = relay_config_page;
@@ -1238,6 +1279,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
     break;
   case mtSwitch:
     doc[sr_for_str] = sr_switch_str;
+    doc[sr_check_interval_str] = checkInterval / 60000ul;
 
     for (int8_t i = 0; i < switchCount; i++)
     {
@@ -1307,6 +1349,7 @@ static void handleSetConfig()
     {
       load_setting(mtSwitch, doc);
       save_config_file(mtSwitch, doc);
+      udp_restart();
       find_remote_relays();
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
@@ -1367,9 +1410,22 @@ static void handleGetRelayState()
   http_server->send(200, FPSTR(TEXT_JSON), _res);
 }
 
+static void handleRestartModule()
+{
+  http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='5;URL=/'><p align='center'>Restart module...</p>"));
+  delay(2000);
+  ESP.restart();
+}
+
 static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
 {
-  getStringValue(module_description, doc[sr_module_str].as<String>());
+  getStringValue(module_description, doc[sr_module_description_str].as<String>());
+  getStringValue(module_name, doc[sr_module_name_str].as<String>());
+  udpPort = doc[sr_udp_port_str].as<uint16_t>();
+  if (udpPort == 0)
+  {
+    udpPort = DEFAULT_UDP_PORT;
+  }
   int8_t x = doc[sr_relays_str].size();
   switch (_mdt)
   {
@@ -1397,6 +1453,7 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
       getStringValue(switchArray[i].relayDescription,
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
+    checkInterval = doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
     break;
   default:
     return (false);
@@ -1488,11 +1545,11 @@ static bool load_config_file(ModuleType _mdt)
     save_config_file(_mdt);
     return (result);
   }
-  // Проверяем размер файла, будем использовать файл размером меньше 2048 байта
+  // Проверяем размер файла, будем использовать файл размером до 2048/4096 байт
   size_t size = configFile.size();
   if (size > CONFIG_SIZE)
   {
-    SR_PRINTLN(F("WiFi configuration file size is too large."));
+    SR_PRINTLN(F("Configuration file size is too large."));
     configFile.close();
     return (false);
   }

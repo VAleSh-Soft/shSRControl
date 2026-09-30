@@ -251,6 +251,20 @@ public:
   String getModuleDescription();
 
   /**
+   * @brief установка имени модуля
+   * 
+   * @param _name новое имя
+   */
+  void setModuleName(const String &_name);
+
+  /**
+   * @brief получение текущего имени модуля
+   * 
+   * @return String 
+   */
+  String getModuleName();
+
+  /**
    * @brief сохранение и восстановление последнего состояния реле при перезапуске модуля
    *
    * @param _state новое состояние опции
@@ -337,9 +351,6 @@ public:
 class shSwitchControl
 {
 private:
-  uint32_t checkInterval = 30000;
-  uint32_t checkTimer = 0;
-
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String _name);
 
@@ -520,6 +531,20 @@ public:
    * @return String
    */
   String getModuleDescription();
+
+  /**
+   * @brief установка имени модуля
+   * 
+   * @param _name новое имя
+   */
+  void setModuleName(const String &_name);
+
+  /**
+   * @brief получение текущего имени модуля
+   * 
+   * @return String 
+   */
+  String getModuleName();
 
   /**
    * @brief установка сетевого имени удаленного реле, которым будет управлять кнопка с индексом index в массиве

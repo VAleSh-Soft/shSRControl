@@ -34,6 +34,8 @@ getRelayState	KEYWORD2
 setStateForAll	KEYWORD2
 setModuleDescription	KEYWORD2
 getModuleDescription	KEYWORD2
+setModuleName	KEYWORD2
+getModuleName	KEYWORD2
 setSaveStateOfRelay	KEYWORD2
 getSaveStateOfRelay	KEYWORD2
 setRelayName	KEYWORD2
