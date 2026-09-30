@@ -169,7 +169,14 @@ public:
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
    */
-  void startDevice(WiFiUDP *_udp, uint16_t _udp_port = DEFAULT_UDP_PORT);
+  void startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+
+  /**
+   * @brief запуск модуля
+   *
+   * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
+   */  
+  void startDevice(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса
@@ -453,7 +460,14 @@ public:
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
    */
-  void startDevice(WiFiUDP *_udp, uint16_t _udp_port = DEFAULT_UDP_PORT);
+  void startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+
+  /**
+   * @brief запуск модуля
+   *
+   * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
+   */  
+  void startDevice(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса

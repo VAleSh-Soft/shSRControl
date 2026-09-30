@@ -260,6 +260,11 @@ void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
   udpPort = _udp_port;
 }
 
+void shRelayControl::startDevice(WiFiUDP *_udp)
+{
+  udp = _udp;
+}
+
 void shRelayControl::attachWebInterface(shWebServer *_server,
                                         FS *_file_system,
                                         const String &_relay_config_page,
@@ -663,6 +668,13 @@ void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
 {
   udp = _udp;
   udpPort = _udp_port;
+  // выполнить первичный поиск привязанных реле
+  find_remote_relays();
+}
+
+void shSwitchControl::startDevice(WiFiUDP *_udp)
+{
+  udp = _udp;
   // выполнить первичный поиск привязанных реле
   find_remote_relays();
 }

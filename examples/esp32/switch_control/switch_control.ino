@@ -2,8 +2,8 @@
  * @file switch_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
  * @brief WiFi switching module built on esp32
- * @version 1.2
- * @date 02.06.2024
+ * @version 1.4
+ * @date 30.09.2026
  *
  * @copyright Copyright (c) 2023
  *
@@ -22,6 +22,7 @@ const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сет�
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
 
 const uint16_t localPort = 54321; // локальный порт для прослушивания udp-пакетов
+const uint32_t checkTimer = 60000; // интервал проверки доступности реле - 60 сек
 
 WebServer HTTP(80);
 WiFiUDP udp;
@@ -49,6 +50,12 @@ void setup()
 
   // работаем с двумя удаленными реле
   switch_control.init(2);
+
+  // следующие две настройки могут быть заменены сохраненными в файле конфигурации,
+  // поэтому устанавливаются здесь - на случай, если это первый запуск, и файла
+  // конфигурации еще нету
+  switch_control.setUdpPort(localPort);
+  switch_control.setCheckTimer(checkTimer);
 
   // заполняем данные удаленных реле
   switch_control.addRelay("relay1", &btn1);
@@ -92,13 +99,11 @@ void setup()
   Serial.println(WiFi.subnetMask());
 
   Serial.print(F("Starting UDP..."));
-  if (udp.begin(localPort))
+  if (udp.begin(switch_control.getUdpPort()))
   {
     Serial.println(F("OK"));
-    // установить интервал проверки доступности реле - 60 сек
-    switch_control.setCheckTimer(60000);
     // запустить контроль модуля выключателей
-    switch_control.startDevice(&udp, localPort);
+    switch_control.startDevice(&udp);
   }
   else
   {

@@ -2,8 +2,8 @@
  * @file relay_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
  * @brief WiFi relay module built on esp32
- * @version 1.2
- * @date 02.06.2024
+ * @version 1.4
+ * @date 30.09.2026
  *
  * @copyright Copyright (c) 2023
  *
@@ -21,7 +21,7 @@
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
 
-const uint16_t localPort = 54321; // локальный порт для прослушивания udp-пакетов
+const uint16_t localPort = 54321;  // локальный порт для прослушивания udp-пакетов
 
 WebServer HTTP(80);
 WiFiUDP udp;
@@ -46,6 +46,11 @@ void setup()
 
   // работаем с двумя реле на модуле
   relay_control.init(2);
+
+  // следующая настройка может быть заменена сохраненной в файле конфигурации,
+  // поэтому устанавливается здесь - на случай, если это первый запуск, и файла
+  // конфигурации еще нету
+  relay_control.setUdpPort(localPort);
 
   // заполняем данные локальных реле (локальная кнопка - только для первого реле)
   relay_control.addRelay("relay1", 16, LOW, &btn1);
@@ -83,11 +88,11 @@ void setup()
   Serial.println(WiFi.subnetMask());
 
   Serial.print(F("Starting UDP..."));
-  if (udp.begin(localPort))
+  if (udp.begin(relay_control.getUdpPort()))
   {
     Serial.println(F("OK"));
     // запустить контроль модуля реле
-    relay_control.startDevice(&udp, localPort);
+    relay_control.startDevice(&udp);
   }
   else
   {
