@@ -58,6 +58,7 @@ static const char TEXT_HTML[] PROGMEM = "text/html";
 static const char TEXT_JSON[] PROGMEM = "text/json";
 static const char RELAY_GET_CONFIG[] PROGMEM = "/relay_getconfig";
 static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
+static const char GET_RELAY_LIST[] PROGMEM = "/get_relay_list";
 static const char SR_SET_CONFIG[] PROGMEM = "/sr_setconfig";
 static const char SR_RESTART[] PROGMEM = "/sr_restart";
 static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
@@ -87,7 +88,8 @@ static String relayFileConfigName = "/relay.json";
 static shSwitchData *switchArray = NULL;
 static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
-static uint32_t checkInterval = 60000;
+static uint32_t checkInterval = DEFAULT_CHECK_INTERVAL;
+static String listOfRemoteRelays[SIZE_LIST_OF_REMOTE_RELAYS];
 
 static String module_description = "";
 static String module_name = "";
@@ -132,7 +134,8 @@ static void find_remote_relays();
 
 static void set_udp_port(uint16_t _udp_port);
 static uint16_t get_udp_port();
-static uint8_t udp_restart();
+
+static int8_t addRelayToList(const String &relay_name);
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -145,6 +148,7 @@ static void handleGetSwitchIndexPage();
 static void handleGetConfig(String _msg);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
+static void handleGetListOfRemoteRelays();
 
 static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
@@ -708,6 +712,8 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
     http_server->on(relay_config_page, HTTP_GET, handleGetSwitchConfigPage);
     // запрос текущих настроек
     http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
+    // запрос списка доступных реле
+    http_server->on(FPSTR(GET_RELAY_LIST), HTTP_GET, handleGetListOfRemoteRelays);
     // сохранение настроек
     http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
     // переключение реле
@@ -788,10 +794,22 @@ void shSwitchControl::receiveUdpPacket(int _size)
     send_udp_packet(udp->remoteIP(), str.c_str(), str.length());
     return;
   }
+  // иначе обработать ответ реле на посланную команду
 
   // далее работаем только с пакетами от модулей реле
   if (get_argument(_resp, sr_type_str) == sr_relay_module_str)
-  { // иначе обработать ответ реле на посланную команду
+  {
+    // если имя пустое - ничего не делаем
+    if (arg_name.length() == 0)
+    {
+      SR_PRINT(F("Invalid relay name with IP: "));
+      SR_PRINTLN(udp->remoteIP().toString());
+      return;
+    }
+
+    // добавляем реле в список доступных
+    addRelayToList(arg_name);
+
     int8_t relay_index = getRelayIndexByName(arg_name);
     if (relay_index >= 0)
     {
@@ -1196,17 +1214,31 @@ static void set_udp_port(uint16_t _udp_port)
 static uint16_t get_udp_port()
 {
   return udpPort;
-  // return ((udp != NULL) ? udpPort : 0);
 }
 
-static uint8_t udp_restart()
+static int8_t addRelayToList(const String &relay_name)
 {
-  if (udp != NULL)
+  if (relay_name.length() > 0)
   {
-    udp->stop();
-    return (udp->begin(udpPort));
+    for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+    {
+      // если строка в списке есть, ничего не делаем
+      if (listOfRemoteRelays[i] == relay_name)
+        return i;
+    }
+
+    // если строка не в списке, добавляем
+    for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+    {
+      if (listOfRemoteRelays[i].length() == 0)
+      {
+        listOfRemoteRelays[i] = relay_name;
+        return i;
+      }
+    }
   }
-  return 0;
+
+  return -1;
 }
 
 // ==== реакции сервера ==============================
@@ -1326,6 +1358,25 @@ static void handleGetSwitchConfig()
   handleGetConfig(get_config_json_string(mtSwitch));
 }
 
+static void handleGetListOfRemoteRelays()
+{
+  DynamicJsonDocument doc(RELAY_DATA_SIZE);
+  JsonArray relays = doc.createNestedArray(sr_relays_str);
+
+  for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+  {
+    if (listOfRemoteRelays[i].length() > 0)
+    {
+      JsonObject rel = relays.createNestedObject();
+      rel[sr_relay_str] = listOfRemoteRelays[i];
+    }
+  }
+
+  String res;
+  serializeJson(doc, res);
+  handleGetConfig(res);
+}
+
 static void getStringValue(String &_var, String _val)
 {
   _var = (_val != "NULL") ? _val : "";
@@ -1361,7 +1412,6 @@ static void handleSetConfig()
     {
       load_setting(mtSwitch, doc);
       save_config_file(mtSwitch, doc);
-      udp_restart();
       find_remote_relays();
     }
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));

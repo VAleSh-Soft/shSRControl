@@ -21,7 +21,9 @@ typedef WebServer shWebServer;
 typedef ESP8266WebServer shWebServer;
 #endif
 
-#define DEFAULT_UDP_PORT 54321
+#define DEFAULT_UDP_PORT 54321        // номер порта по умолчанию для обмена udp-пакетами
+#define DEFAULT_CHECK_INTERVAL 60000  // интервал опроса удаленных реле модулем выключателя, миллисекунд
+#define SIZE_LIST_OF_REMOTE_RELAYS 10 // максимальный размер списка доступных в сети удаленных реле
 
 // описание свойств реле
 struct shRelayData
@@ -30,7 +32,7 @@ struct shRelayData
   uint8_t relayPin;          // пин, к которому подключено реле
   uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
   bool relayLastState;       // последнее состояние реле
-  srButton *relayButton;     // локальная кнопка, управляющая реле (располагается 
+  srButton *relayButton;     // локальная кнопка, управляющая реле (располагается
                              // на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
   shRelayData() : relayName(""),
@@ -119,15 +121,15 @@ public:
   /**
    * @brief установка порта для отправки/приема udp-пакетов
    *
-   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть 
+   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть
    *                  одинаковым для всех связанных модулей
    */
   void setUdpPort(uint16_t _udp_port);
 
   /**
    * @brief получение текущего порта для отправки/приема udp-пакетов
-   * 
-   * @return uint16_t 
+   *
+   * @return uint16_t
    */
   uint16_t getUdpPort();
 
@@ -175,7 +177,7 @@ public:
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   */  
+   */
   void startDevice(WiFiUDP *_udp);
 
   /**
@@ -259,15 +261,15 @@ public:
 
   /**
    * @brief установка имени модуля
-   * 
+   *
    * @param _name новое имя
    */
   void setModuleName(const String &_name);
 
   /**
    * @brief получение текущего имени модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getModuleName();
 
@@ -388,15 +390,15 @@ public:
   /**
    * @brief установка порта для отправки/приема udp-пакетов
    *
-   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть 
+   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть
    *                  одинаковым для всех связанных модулей
    */
   void setUdpPort(uint16_t _udp_port);
 
   /**
    * @brief получение текущего порта для отправки/приема udp-пакетов
-   * 
-   * @return uint16_t 
+   *
+   * @return uint16_t
    */
   uint16_t getUdpPort();
 
@@ -466,7 +468,7 @@ public:
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   */  
+   */
   void startDevice(WiFiUDP *_udp);
 
   /**
@@ -548,15 +550,15 @@ public:
 
   /**
    * @brief установка имени модуля
-   * 
+   *
    * @param _name новое имя
    */
   void setModuleName(const String &_name);
 
   /**
    * @brief получение текущего имени модуля
-   * 
-   * @return String 
+   *
+   * @return String
    */
   String getModuleName();
 
