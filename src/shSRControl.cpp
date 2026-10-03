@@ -135,7 +135,8 @@ static void find_remote_relays();
 static void set_udp_port(uint16_t _udp_port);
 static uint16_t get_udp_port();
 
-static int8_t addRelayToList(const String &relay_name);
+static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
+static void clearListOfRemoteRelays();
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -808,7 +809,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
     }
 
     // добавляем реле в список доступных
-    addRelayToList(arg_name);
+    addRelayToListOfRemoteRelays(arg_name);
 
     int8_t relay_index = getRelayIndexByName(arg_name);
     if (relay_index >= 0)
@@ -1216,7 +1217,7 @@ static uint16_t get_udp_port()
   return udpPort;
 }
 
-static int8_t addRelayToList(const String &relay_name)
+static int8_t addRelayToListOfRemoteRelays(const String &relay_name)
 {
   if (relay_name.length() > 0)
   {
@@ -1239,6 +1240,14 @@ static int8_t addRelayToList(const String &relay_name)
   }
 
   return -1;
+}
+
+static void clearListOfRemoteRelays()
+{
+  for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+  {
+    listOfRemoteRelays[i] = "";
+  }
 }
 
 // ==== реакции сервера ==============================
@@ -1410,6 +1419,13 @@ static void handleSetConfig()
     }
     else if (doc[sr_for_str].as<String>() == sr_switch_str)
     {
+      if (doc[sr_udp_port_str].as<uint16_t>() != udpPort)
+      {
+        // если изменился номер порта, очистить список доступных удаленных реле
+        // потому что с новым портом реле из списка станут недоступными
+        clearListOfRemoteRelays();
+      }
+
       load_setting(mtSwitch, doc);
       save_config_file(mtSwitch, doc);
       find_remote_relays();
