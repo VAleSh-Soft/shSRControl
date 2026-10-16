@@ -1,3 +1,5 @@
 .vscode/*
 _build/*
-src/extras/temp/*
+*.html
+*.py
+*.sh
