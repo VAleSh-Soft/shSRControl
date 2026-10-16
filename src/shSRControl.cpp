@@ -1260,22 +1260,22 @@ static void handleGetConfigPage(String arg, String page)
 
 static void handleGetRelayConfigPage()
 {
-  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(config_page));
+  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(CONFIG_PAGE));
 }
 
 static void handleGetSwitchConfigPage()
 {
-  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(config_page));
+  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(CONFIG_PAGE));
 }
 
 static void handleGetRelayIndexPage()
 {
-  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(index_page));
+  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(INDEX_PAGE));
 }
 
 static void handleGetSwitchIndexPage()
 {
-  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(index_page));
+  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(INDEX_PAGE));
 }
 
 static void handleGetConfig(String _msg)
