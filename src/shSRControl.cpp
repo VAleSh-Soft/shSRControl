@@ -1,8 +1,10 @@
 #include "shSRControl.h"
 #include <new>
+#include <time.h>
 #include <ArduinoJson.h>
 #include "extras/c_page.h"
 #include "extras/i_page.h"
+#include "extras/t_page.h"
 
 #define SR_PRINT(x)         \
   if (logOnState && serial) \
@@ -27,7 +29,24 @@ static const String sr_last_state_str = "last";
 static const String sr_ip_addr_str = "addr";
 static const String sr_wificonf_str = "wificonf";
 static const String sr_relayconf_str = "relconf";
+static const String sr_tasksconf_str = "tasksconf";
 static const String sr_save_state_str = "save_state";
+static const String sr_ntp_enabled_str = "ntp_enabled";
+static const String sr_ntp_server1_str = "ntp_server1";
+static const String sr_ntp_server2_str = "ntp_server2";
+static const String sr_ntp_server3_str = "ntp_server3";
+static const String sr_unix_str = "unix";
+static const String sr_ms_str = "ms";
+static const String sr_tz_str = "tz";
+static const String sr_tmax_str = "tmax";
+
+static const String sr_t_list_str = "t_list";
+static const String sr_r_list_str = "r_list";
+static const String sr_state_str = "state";
+static const String sr_time_str = "time";
+static const String sr_rel_str = "rel";
+static const String sr_act_str = "act";
+static const String sr_rep_str = "rep";
 
 // ==== значения параметров в запросах/ответах =======
 static const String sr_ok_str = "ok";
@@ -56,6 +75,7 @@ static const String sr_switch_module_str = "s_module";
 static const char TEXT_PLAIN[] PROGMEM = "text/plain";
 static const char TEXT_HTML[] PROGMEM = "text/html";
 static const char TEXT_JSON[] PROGMEM = "text/json";
+static const char APP_JSON[] PROGMEM = "application/json";
 static const char RELAY_GET_CONFIG[] PROGMEM = "/relay_getconfig";
 static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
 static const char GET_RELAY_LIST[] PROGMEM = "/get_relay_list";
@@ -64,19 +84,31 @@ static const char SR_RESTART[] PROGMEM = "/sr_restart";
 static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
 static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
+static const char TASK_LIST_GET[] PROGMEM = "/tasks_get";
+static const char TASK_LIST_SET[] PROGMEM = "/tasks_set";
+static const char TIME_DATA[] PROGMEM = "/time";
+static const char NTP_DATA[] PROGMEM = "/ntp";
 
 // константы для работы с JSON
 #if defined(ARDUINO_ARCH_ESP8266)
 static const uint16_t CONFIG_SIZE = 2048;
+static const uint8_t MAX_TASKS_COUNT = 16;
+static const uint8_t MAX_RELAY_COUNT = 10;
+static const uint16_t RELAY_LIST_DATA_SIZE = 256;
 #else
 static const uint16_t CONFIG_SIZE = 4096;
+static const uint8_t MAX_TASKS_COUNT = 32;
+static const uint8_t MAX_RELAY_COUNT = 20;
+static const uint16_t RELAY_LIST_DATA_SIZE = 512;
 #endif
 static const uint16_t RELAY_DATA_SIZE = 256;
 
 enum ModuleType : uint8_t
 {
   mtRelay,
-  mtSwitch
+  mtSwitch,
+  mtTasks,
+  mtNtp
 };
 
 // ==== общие данные =================================
@@ -90,6 +122,19 @@ static int8_t switchCount = 0;
 static String switchFileConfigName = "/switch.json";
 static uint32_t checkInterval = DEFAULT_CHECK_INTERVAL;
 static String listOfRemoteRelays[SIZE_LIST_OF_REMOTE_RELAYS];
+
+static shSchedulerData *tasksArray = NULL;
+static uint8_t tasksCount = 0;
+static String *relayNameList = NULL;
+static uint8_t relayNameCount = 0;
+static String tasksFileConfigName = "/tasks.json";
+
+static String ntpFileConfigName = "/ntp.json";
+static bool ntp_enabled = true;
+static const char *ntp_server1 = "ru.pool.ntp.org";
+static const char *ntp_server2 = "pool.ntp.org";
+static const char *ntp_server3 = "time.google.com";
+static time_t tz_offset = 10800;
 
 static String module_description = "";
 static String module_name = "";
@@ -107,6 +152,7 @@ static shBuzzer bzr;
 
 static String wifi_config_page = "";
 static String relay_config_page = "";
+static String tasks_config_page = "";
 
 // ===================================================
 
@@ -150,6 +196,14 @@ static void handleGetConfig(String _msg);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 static void handleGetListOfRemoteRelays();
+
+static void handleGetConfigSchedulerPage();
+static void handleReadTasksSetting();
+static void handleWriteTasksSetting();
+static void handleReadTimeData();
+static void handleWriteTimeData();
+static void handleReadNtpData();
+static void handleWriteNtpData();
 
 static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
@@ -273,6 +327,7 @@ void shRelayControl::startDevice(WiFiUDP *_udp)
 void shRelayControl::attachWebInterface(shWebServer *_server,
                                         FS *_file_system,
                                         const String &_relay_config_page,
+                                        const String &_tasks_config_page,
                                         const String &_wifi_config_page)
 {
   http_server = _server;
@@ -292,6 +347,7 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
 
   relay_config_page = _relay_config_page;
   wifi_config_page = _wifi_config_page;
+  tasks_config_page = _tasks_config_page;
 
   if (relay_config_page.indexOf("/") != 0)
   {
@@ -300,6 +356,10 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
   if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
   {
     wifi_config_page = "/" + wifi_config_page;
+  }
+  if (tasks_config_page.length() > 0 && tasks_config_page.indexOf("/") != 0)
+  {
+    tasks_config_page = "/" + tasks_config_page;
   }
 
   if (http_server)
@@ -317,6 +377,23 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
     http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
     // перезагрузка модуля
     http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
+    if (tasks_config_page.length() > 0)
+    {
+      // вызов страницы настройки планировщика
+      http_server->on(tasks_config_page, HTTP_GET, &handleGetConfigSchedulerPage);
+      // заполнение списка задач
+      http_server->on(FPSTR(TASK_LIST_GET), HTTP_GET, handleReadTasksSetting);
+      // сохранение списка задач
+      http_server->on(FPSTR(TASK_LIST_SET), HTTP_POST, handleWriteTasksSetting);
+      // получение времени модуля
+      http_server->on(FPSTR(TIME_DATA), HTTP_GET, handleReadTimeData);
+      // сохранение времени модуля
+      http_server->on(FPSTR(TIME_DATA), HTTP_POST, handleWriteTimeData);
+      // получение NTP настроек
+      http_server->on(FPSTR(NTP_DATA), HTTP_GET, handleReadNtpData);
+      // сохранение NTP настроек
+      http_server->on(FPSTR(NTP_DATA), HTTP_POST, handleWriteNtpData);
+    }
   }
 }
 
@@ -1314,6 +1391,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
   JsonArray relays = doc.createNestedArray(sr_relays_str);
   doc[sr_wificonf_str] = wifi_config_page;
   doc[sr_relayconf_str] = relay_config_page;
+  doc[sr_tasksconf_str] = tasks_config_page;
 
   switch (_mdl)
   {
@@ -1384,6 +1462,206 @@ static void handleGetListOfRemoteRelays()
   String res;
   serializeJson(doc, res);
   handleGetConfig(res);
+}
+
+static void handleGetConfigSchedulerPage()
+{
+  http_server->send(200, FPSTR(TEXT_HTML), FPSTR(TASK_LIST_PAGE));
+}
+
+static void handleReadTasksSetting()
+{
+  // clear() обязателен: иначе createNestedArray добавит второй t_list
+  static StaticJsonDocument<CONFIG_SIZE> doc;
+  doc.clear();
+
+  JsonArray tasks = doc.createNestedArray(sr_t_list_str);
+  doc[sr_tmax_str] = MAX_TASKS_COUNT;
+  if (tasksArray != NULL)
+  {
+    for (uint8_t i = 0; i < tasksCount; i++)
+    {
+      JsonObject task = tasks.createNestedObject();
+      task[sr_state_str] = (uint8_t)tasksArray[i].task_status;
+      task[sr_time_str] = tasksArray[i].time_for_task;
+      task[sr_rel_str] = tasksArray[i].relay_index;
+      task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
+      task[sr_rep_str] = (uint8_t)tasksArray[i].periodicity;
+    }
+  }
+
+  JsonArray relays = doc.createNestedArray(sr_r_list_str);
+  if (relayNameList != NULL)
+  {
+    for (uint8_t i = 0; i < relayNameCount; i++)
+    {
+      relays.add(relayNameList[i]);
+    }
+  }
+
+  String json = "";
+  serializeJson(doc, json);
+  http_server->send(200, FPSTR(APP_JSON), json);
+}
+
+static void handleWriteTasksSetting()
+{
+  if (!http_server->hasArg("plain"))
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
+    return;
+  }
+
+  String json = http_server->arg("plain");
+
+  // проверяем, что пришедший текст действительно валидный JSON
+  // с массивом t_list — иначе не сохраняем, чтобы не затереть рабочий список
+  DynamicJsonDocument doc(CONFIG_SIZE);
+
+  DeserializationError err = deserializeJson(doc, json);
+  if (err || !doc["t_list"].is<JsonArray>())
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    return;
+  }
+
+  // лимит задач — проверка ДО изменения списка, чтобы старый остался целым
+  size_t count = doc[sr_t_list_str].size();
+  if (count > MAX_TASKS_COUNT)
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("TOO MANY"));
+    return;
+  }
+
+  delete[] tasksArray;
+  tasksArray = NULL;
+  tasksArray = new (std::nothrow) shSchedulerData[count];
+
+  tasksCount = 0;
+  if (tasksArray != NULL)
+  {
+    for (JsonObject t_list_item : doc[sr_t_list_str].as<JsonArray>())
+    {
+      tasksArray[tasksCount].task_status = t_list_item[sr_state_str].as<bool>();
+      tasksArray[tasksCount].time_for_task = t_list_item[sr_time_str].as<uint32_t>();
+      tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
+      tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
+      tasksArray[tasksCount].periodicity = (task_periodicity)t_list_item[sr_rep_str].as<uint8_t>();
+      tasksCount++;
+    }
+  }
+
+  save_config_file(mtTasks, doc);
+
+  http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
+}
+
+static void handleReadTimeData()
+{
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+
+  StaticJsonDocument<256> doc;
+
+  doc[sr_unix_str] = (uint32_t)tv.tv_sec;
+  doc[sr_ms_str] = (uint32_t)tv.tv_usec / 1000;
+  doc[sr_tz_str] = tz_offset;
+
+  String json = "";
+  serializeJson(doc, json);
+
+  http_server->send(200, FPSTR(APP_JSON), json);
+}
+
+static void handleWriteTimeData()
+{
+  if (http_server->hasArg("plain") == false)
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    return;
+  }
+
+  String json = http_server->arg("plain");
+
+  StaticJsonDocument<256> doc;
+
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, json);
+  if (!error)
+  {
+    struct timeval tv = {.tv_sec = (time_t)doc[sr_unix_str].as<uint32_t>(),
+                         .tv_usec = (suseconds_t)doc[sr_ms_str].as<uint32_t>() * 1000};
+    settimeofday(&tv, nullptr);
+    tz_offset = doc[sr_tz_str].as<int32_t>();
+
+    // получение [UTC] времени
+    tm m_time;
+    if (!getLocalTime(&m_time))
+    {
+      http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+      return;
+    }
+    http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
+    return;
+  }
+  http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+}
+
+static void handleReadNtpData()
+{
+  StaticJsonDocument<512> doc;
+  doc[sr_ntp_enabled_str] = (uint8_t)ntp_enabled;
+  doc[sr_ntp_server1_str] = ntp_server1;
+  doc[sr_ntp_server2_str] = ntp_server2;
+  doc[sr_ntp_server3_str] = ntp_server3;
+
+  String json = "";
+  serializeJson(doc, json);
+  http_server->send(200, FPSTR(APP_JSON), json);
+}
+
+static void handleWriteNtpData()
+{
+  if (!http_server->hasArg("plain"))
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
+    return;
+  }
+
+  String json = http_server->arg("plain");
+  DynamicJsonDocument doc(512);
+  
+  DeserializationError err = deserializeJson(doc, json);
+  if (err)
+  {
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    return;
+  }
+
+  // читаем новые значения
+  ntp_enabled = doc[sr_ntp_enabled_str].as<bool>();
+  const char *s1 = doc[sr_ntp_server1_str].as<const char *>();
+  const char *s2 = doc[sr_ntp_server2_str].as<const char *>();
+  const char *s3 = doc[sr_ntp_server3_str].as<const char *>();
+
+  // обновляем глобальные переменные
+  if (s1 && strlen(s1) > 0)
+    ntp_server1 = s1;
+  if (s2 && strlen(s2) > 0)
+    ntp_server2 = s2;
+  if (s3 && strlen(s3) > 0)
+    ntp_server3 = s3;
+
+  // применяем новые NTP настройки
+  if (ntp_enabled)
+  {
+    configTzTime("UTC", ntp_server1, ntp_server2, ntp_server3);
+  }
+
+  // сохраняем настройки
+  save_config_file(mtNtp, doc);
+
+  http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
 }
 
 static void getStringValue(String &_var, String _val)
@@ -1548,6 +1826,10 @@ static String get_config_file_name(ModuleType _mdt)
     return (relayFileConfigName);
   case mtSwitch:
     return (switchFileConfigName);
+  case mtTasks:
+    return (tasksFileConfigName);
+  case mtNtp:
+    return (ntpFileConfigName);
   default:
     return ("");
   }

@@ -25,6 +25,30 @@ typedef ESP8266WebServer shWebServer;
 #define DEFAULT_CHECK_INTERVAL 60000  // интервал опроса удаленных реле модулем выключателя, миллисекунд
 #define SIZE_LIST_OF_REMOTE_RELAYS 10 // максимальный размер списка доступных в сети удаленных реле
 
+ // описание флагов периодичности выполнения задачи
+enum task_periodicity : uint8_t
+{
+  TP_ONCE = 0x00,    // однократное срабатывание; 0b00000000
+  TP_MON_DAY = 0x01, // по понедельникам;         0b00000001
+  TP_TUE_DAY = 0x02, // по вторникам;             0b00000010
+  TP_WED_DAY = 0x04, // по средам;                0b00000100
+  TP_THU_DAY = 0x08, // по четвергам;             0b00001000
+  TP_FRI_DAY = 0x10, // по пятницам;              0b00010000
+  TP_SAT_DAY = 0x20, // по субботам;              0b00100000
+  TP_SUN_DAY = 0x40, // по воскресеньям;          0b01000000
+  TP_DAILY = 0x80    // ежедневное срабатывание;  0b10000000
+};
+
+// описание свойств задач планировщика
+struct shSchedulerData
+{
+  bool task_status;             // статус задачи
+  uint32_t time_for_task;       // время срабатывания задачи
+  uint8_t relay_index;          // индекс реле задачи
+  bool action_for_relay;        // действие с реле (включить/выключить)
+  task_periodicity periodicity; // периодичность выполнения задачи
+};
+
 // описание свойств реле
 struct shRelayData
 {
@@ -186,11 +210,13 @@ public:
    * @param _server ссылка на экземпляр Web-сервера, с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
    * @param _relay_config_page адрес, по которому будет вызываться Web-страница конфигурации реле
+   * @param _tasks_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    * @param _wifi_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    */
   void attachWebInterface(shWebServer *_server,
                           FS *_file_system,
                           const String &_relay_config_page = "/relay_config",
+                          const String &_tasks_config_page = "",
                           const String &_wifi_config_page = "");
 
   /**
