@@ -26,7 +26,7 @@ typedef ESP8266WebServer shWebServer;
 #define SIZE_LIST_OF_REMOTE_RELAYS 10 // максимальный размер списка доступных в сети удаленных реле
 
 // описание флагов периодичности выполнения задачи
-enum task_periodicity : uint8_t
+enum shTaskRepeat : uint8_t
 {
   TP_ONCE = 0x00,    // однократное срабатывание; 0b00000000
   TP_MON_DAY = 0x01, // по понедельникам;         0b00000001
@@ -42,11 +42,11 @@ enum task_periodicity : uint8_t
 // описание свойств задач планировщика
 struct shSchedulerData
 {
-  bool task_status;             // статус задачи
-  uint32_t time_for_task;       // время срабатывания задачи
-  uint8_t relay_index;          // индекс реле задачи
-  bool action_for_relay;        // действие с реле (включить/выключить)
-  task_periodicity periodicity; // периодичность выполнения задачи
+  bool task_status;         // статус задачи
+  uint32_t time_for_task;   // время срабатывания задачи
+  uint8_t relay_index;      // индекс реле задачи
+  bool action_for_relay;    // действие с реле (включить/выключить)
+  shTaskRepeat task_repeat; // периодичность выполнения задачи
 };
 
 // описание свойств реле

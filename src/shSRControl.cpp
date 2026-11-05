@@ -103,7 +103,7 @@ static const uint16_t RELAY_LIST_DATA_SIZE = 512;
 #endif
 static const uint16_t RELAY_DATA_SIZE = 256;
 
-enum ModuleType : uint8_t
+enum srModuleType : uint8_t
 {
   mtRelay,
   mtSwitch,
@@ -112,6 +112,8 @@ enum ModuleType : uint8_t
 };
 
 // ==== общие данные =================================
+
+srModuleType moduleFlag = mtRelay;
 
 static shRelayData *relayArray = NULL;
 static int8_t relayCount = 0;
@@ -131,9 +133,9 @@ static String tasksFileConfigName = "/tasks.json";
 
 static String ntpFileConfigName = "/ntp.json";
 static bool ntp_enabled = true;
-static const char *ntp_server1 = "ru.pool.ntp.org";
-static const char *ntp_server2 = "pool.ntp.org";
-static const char *ntp_server3 = "time.google.com";
+static String ntp_server1 = "ru.pool.ntp.org";
+static String ntp_server2 = "pool.ntp.org";
+static String ntp_server3 = "time.google.com";
 static int32_t tz_offset = 10800;
 
 static String module_description = "";
@@ -185,8 +187,9 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
 static void clearListOfRemoteRelays();
 
 // ===================================================
-static void checkTasksList(ModuleType _mdt);
-static bool check_day_of_week(uint8_t _day, task_periodicity _per);
+static void checkTasksList(srModuleType _mdt);
+static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
+static void getRelayNameList();
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -218,8 +221,8 @@ static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
                                 const IPAddress _ip);
-static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl);
-static String get_config_json_string(ModuleType _mdl);
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl);
+static String get_config_json_string(srModuleType _mdl);
 
 static void handleSetConfig();
 
@@ -230,12 +233,12 @@ static void handleGetRelayState();
 static void handleRestartModule();
 
 // ===================================================
-static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc);
+static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc);
 
-static String get_config_file_name(ModuleType _mdt);
-static bool save_config_file(ModuleType _mdt);
-static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc);
-static bool load_config_file(ModuleType _mdt);
+static String get_config_file_name(srModuleType _mdt);
+static bool save_config_file(srModuleType _mdt);
+static bool save_config_file(srModuleType _mdt, DynamicJsonDocument &doc);
+static bool load_config_file(srModuleType _mdt);
 
 // оператор сравнения двух задач (если понадобится определять дубликаты)
 bool operator==(const shSchedulerData &a, const shSchedulerData &b)
@@ -244,12 +247,12 @@ bool operator==(const shSchedulerData &a, const shSchedulerData &b)
           a.time_for_task == b.time_for_task &&
           a.relay_index == b.relay_index &&
           a.action_for_relay == b.action_for_relay &&
-          a.periodicity == b.periodicity);
+          a.task_repeat == b.task_repeat);
 }
 
 // ==== shRelayControl class ===========================
 
-shRelayControl::shRelayControl() {}
+shRelayControl::shRelayControl() { moduleFlag = mtRelay; }
 
 void shRelayControl::init(uint8_t _relay_count)
 {
@@ -263,6 +266,17 @@ void shRelayControl::init(uint8_t _relay_count)
   if (relayArray)
   {
     relayCount = _relay_count;
+  }
+
+  if (relayNameList)
+  {
+    delete[] relayNameList;
+  }
+
+  relayNameList = new (std::nothrow) String[relayCount];
+  if (relayNameList)
+  {
+    relayNameCount = relayCount;
   }
 
   if (Serial != NULL)
@@ -291,7 +305,7 @@ bool shRelayControl::addRelay(const String &relay_name,
                                     relay_description);
         pinMode(relay_pin, OUTPUT);
         digitalWrite(relay_pin, !control_level);
-        Serial.println(digitalRead(relayArray[i].relayPin));
+        SR_PRINTLN(digitalRead(relayArray[i].relayPin));
         result = true;
         break;
       }
@@ -682,7 +696,7 @@ bool shRelayControl::loadConfig()
 
 // ==== shSwitchControl class ==========================
 
-shSwitchControl::shSwitchControl() {}
+shSwitchControl::shSwitchControl() { moduleFlag = mtSwitch; }
 
 void shSwitchControl::init(uint8_t _switch_count)
 {
@@ -696,6 +710,17 @@ void shSwitchControl::init(uint8_t _switch_count)
   if (switchArray)
   {
     switchCount = _switch_count;
+  }
+
+  if (relayNameList)
+  {
+    delete[] relayNameList;
+  }
+
+  relayNameList = new (std::nothrow) String[switchCount];
+  if (relayNameList)
+  {
+    relayNameCount = switchCount;
   }
 
   if (Serial != NULL)
@@ -1360,17 +1385,7 @@ static void clearListOfRemoteRelays()
 }
 
 // ==== обработка списка заданий планировщика ========
-static bool check_day_of_week(uint8_t _day, task_periodicity _per)
-{
-  // в структуре tm день недели кодируется 0(вск)..6(сбт)
-  // у нас день недели кодируется 0(пнд)..6(вск)
-  // поэтому приводим день недели к нужному виду
-  _day = (_day) ? --_day : 6;
-  // проверяем наличие нужного бита и возвращаем результат
-  return ((uint8_t)_per & 1 << _day);
-}
-
-static void checkTasksList(ModuleType _mdt)
+static void checkTasksList(srModuleType _mdt)
 {
   if (tasksArray != NULL && tasksCount > 0)
   {
@@ -1388,9 +1403,9 @@ static void checkTasksList(ModuleType _mdt)
         if ((tasksArray[i].task_status) &&
             ((tasksArray[i].time_for_task * 60) == cur_time))
         {
-          if (tasksArray[i].periodicity == TP_DAILY ||
-              tasksArray[i].periodicity == TP_ONCE ||
-              check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].periodicity))
+          if (tasksArray[i].task_repeat == TP_DAILY ||
+              tasksArray[i].task_repeat == TP_ONCE ||
+              check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].task_repeat))
           {
             switch (_mdt)
             {
@@ -1403,7 +1418,7 @@ static void checkTasksList(ModuleType _mdt)
             default:
               break;
             }
-            if (tasksArray[i].periodicity == TP_ONCE)
+            if (tasksArray[i].task_repeat == TP_ONCE)
             {
               tasksArray[i].task_status = false;
               is_changed = true;
@@ -1413,9 +1428,27 @@ static void checkTasksList(ModuleType _mdt)
       }
       if (is_changed)
       {
-        // TODO: не забыть сделать сохранение списка задач, если были изменения статуса
+        save_config_file(mtTasks);
       }
     }
+  }
+}
+
+static bool check_day_of_week(uint8_t _day, shTaskRepeat _per)
+{
+  // в структуре tm день недели кодируется 0(вск)..6(сбт)
+  // у нас день недели кодируется 0(пнд)..6(вск)
+  // поэтому приводим день недели к нужному виду
+  _day = (_day) ? --_day : 6;
+  // проверяем наличие нужного бита и возвращаем результат
+  return ((uint8_t)_per & 1 << _day);
+}
+
+static void getRelayNameList()
+{
+  for (uint8_t i = 0; i < relayNameCount; i++)
+  {
+    relayNameList[i] = (moduleFlag == mtRelay) ? relayArray[i].relayName : switchArray[i].relayName;
   }
 }
 
@@ -1475,7 +1508,7 @@ static void get_relay_data_json(JsonObject &rel,
   rel[sr_ip_addr_str] = _ip.toString();
 }
 
-static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
 {
   if ((uint8_t)_mdl <= 1)
   {
@@ -1535,7 +1568,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
         task[sr_time_str] = tasksArray[i].time_for_task;
         task[sr_rel_str] = tasksArray[i].relay_index;
         task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
-        task[sr_rep_str] = (uint8_t)tasksArray[i].periodicity;
+        task[sr_rep_str] = (uint8_t)tasksArray[i].task_repeat;
       }
     }
   }
@@ -1555,7 +1588,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
   }
 }
 
-static String get_config_json_string(ModuleType _mdl)
+static String get_config_json_string(srModuleType _mdl)
 {
   DynamicJsonDocument doc(CONFIG_SIZE);
 
@@ -1616,6 +1649,7 @@ static void setHttpHandleForScheduler()
 
     load_config_file(mtTasks);
     load_config_file(mtNtp);
+    getRelayNameList();
   }
 }
 
@@ -1672,7 +1706,7 @@ static void handleWriteTasksSetting()
 
   save_config_file(mtTasks, doc);
 
-  http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
+  http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save tasks list...</p>"));
 }
 
 static void handleReadTimeData()
@@ -1754,14 +1788,13 @@ static void handleWriteNtpData()
     http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
     return;
   }
-
   // читаем новые значения
   load_setting(mtNtp, doc);
 
   // сохраняем настройки
   save_config_file(mtNtp, doc);
 
-  http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
+  http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save NTP settings...</p>"));
 }
 
 static void getStringValue(String &_var, String _val)
@@ -1773,7 +1806,7 @@ static void handleSetConfig()
 {
   if (http_server->hasArg(F("plain")) == false)
   {
-    http_server->send(200, FPSTR(TEXT_PLAIN), F("Body not received"));
+    http_server->send(400, FPSTR(TEXT_PLAIN), F("Body not received"));
     SR_PRINTLN(F("Failed to save configuration data, no data"));
     return;
   }
@@ -1808,6 +1841,7 @@ static void handleSetConfig()
       save_config_file(mtSwitch, doc);
       find_remote_relays();
     }
+    getRelayNameList();
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
 }
@@ -1873,7 +1907,7 @@ static void handleRestartModule()
   ESP.restart();
 }
 
-static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
+static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
 {
   if ((uint8_t)_mdt <= 1)
   {
@@ -1942,24 +1976,26 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
         tasksArray[tasksCount].time_for_task = t_list_item[sr_time_str].as<uint32_t>();
         tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
         tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
-        tasksArray[tasksCount].periodicity = (task_periodicity)t_list_item[sr_rep_str].as<uint8_t>();
+        tasksArray[tasksCount].task_repeat = (shTaskRepeat)t_list_item[sr_rep_str].as<uint8_t>();
         tasksCount++;
       }
     }
     break;
 
   case mtNtp:
+  {
     ntp_enabled = doc[sr_ntp_enabled_str].as<bool>();
-    ntp_server1 = doc[sr_ntp_server1_str].as<String>().c_str();
-    ntp_server2 = doc[sr_ntp_server2_str].as<String>().c_str();
-    ntp_server3 = doc[sr_ntp_server3_str].as<String>().c_str();
+    ntp_server1 = doc["ntp_server1"].as<String>();
+    ntp_server2 = doc["ntp_server2"].as<String>();
+    ntp_server3 = doc["ntp_server3"].as<String>();
 
     // применяем новые NTP настройки
     if (ntp_enabled)
     {
-      configTzTime("UTC", ntp_server1, ntp_server2, ntp_server3);
+      configTzTime("UTC", ntp_server1.c_str(), ntp_server2.c_str(), ntp_server3.c_str());
     }
-    break;
+  }
+  break;
   default:
     return (false);
     break;
@@ -1967,7 +2003,7 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
   return (true);
 }
 
-static String get_config_file_name(ModuleType _mdt)
+static String get_config_file_name(srModuleType _mdt)
 {
   switch (_mdt)
   {
@@ -1984,14 +2020,14 @@ static String get_config_file_name(ModuleType _mdt)
   }
 }
 
-static bool save_config_file(ModuleType _mdt)
+static bool save_config_file(srModuleType _mdt)
 {
   DynamicJsonDocument doc(CONFIG_SIZE);
   get_config_json_doc(doc, _mdt);
   return (save_config_file(_mdt, doc));
 }
 
-static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
+static bool save_config_file(srModuleType _mdt, DynamicJsonDocument &doc)
 {
   if (!file_system)
   {
@@ -2034,7 +2070,7 @@ static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc)
   return (result);
 }
 
-static bool load_config_file(ModuleType _mdt)
+static bool load_config_file(srModuleType _mdt)
 {
   File configFile;
   String fileName = get_config_file_name(_mdt);
