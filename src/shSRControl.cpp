@@ -237,7 +237,6 @@ static bool save_config_file(ModuleType _mdt);
 static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc);
 static bool load_config_file(ModuleType _mdt);
 
-
 // оператор сравнения двух задач (если понадобится определять дубликаты)
 bool operator==(const shSchedulerData &a, const shSchedulerData &b)
 {
@@ -1478,17 +1477,21 @@ static void get_relay_data_json(JsonObject &rel,
 
 static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
 {
-  doc[sr_module_description_str] = module_description;
-  doc[sr_module_name_str] = module_name;
-  doc[sr_udp_port_str] = udpPort;
-  JsonArray relays = doc.createNestedArray(sr_relays_str);
-  doc[sr_wificonf_str] = wifi_config_page;
-  doc[sr_relayconf_str] = relay_config_page;
-  doc[sr_tasksconf_str] = tasks_config_page;
+  if ((uint8_t)_mdl <= 1)
+  {
+    doc[sr_module_description_str] = module_description;
+    doc[sr_module_name_str] = module_name;
+    doc[sr_udp_port_str] = udpPort;
+    doc[sr_wificonf_str] = wifi_config_page;
+    doc[sr_relayconf_str] = relay_config_page;
+    doc[sr_tasksconf_str] = tasks_config_page;
+  }
 
   switch (_mdl)
   {
   case mtRelay:
+  {
+    JsonArray relays = doc.createNestedArray(sr_relays_str);
     doc[sr_for_str] = sr_relay_str;
     doc[sr_save_state_str] = (byte)save_state_of_relay;
 
@@ -1500,8 +1503,12 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
                           relayArray[i].relayDescription,
                           (byte)relayArray[i].relayLastState);
     }
-    break;
+  }
+  break;
+
   case mtSwitch:
+  {
+    JsonArray relays = doc.createNestedArray(sr_relays_str);
     doc[sr_for_str] = sr_switch_str;
     doc[sr_check_interval_str] = checkInterval / 60000ul;
 
@@ -1513,6 +1520,37 @@ static void get_config_json_doc(DynamicJsonDocument &doc, ModuleType _mdl)
                           switchArray[i].relayDescription,
                           switchArray[i].relayAddress);
     }
+  }
+  break;
+
+  case mtTasks:
+  {
+    JsonArray tasks = doc.createNestedArray(sr_t_list_str);
+    if (tasksArray != NULL)
+    {
+      for (uint8_t i = 0; i < tasksCount; i++)
+      {
+        JsonObject task = tasks.createNestedObject();
+        task[sr_state_str] = (uint8_t)tasksArray[i].task_status;
+        task[sr_time_str] = tasksArray[i].time_for_task;
+        task[sr_rel_str] = tasksArray[i].relay_index;
+        task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
+        task[sr_rep_str] = (uint8_t)tasksArray[i].periodicity;
+      }
+    }
+  }
+  break;
+
+  case mtNtp:
+  {
+    doc[sr_ntp_enabled_str] = (uint8_t)ntp_enabled;
+    doc[sr_ntp_server1_str] = ntp_server1;
+    doc[sr_ntp_server2_str] = ntp_server2;
+    doc[sr_ntp_server3_str] = ntp_server3;
+  }
+  break;
+
+  default:
     break;
   }
 }
@@ -1575,6 +1613,9 @@ static void setHttpHandleForScheduler()
     http_server->on(FPSTR(NTP_DATA), HTTP_GET, handleReadNtpData);
     // сохранение NTP настроек
     http_server->on(FPSTR(NTP_DATA), HTTP_POST, handleWriteNtpData);
+
+    load_config_file(mtTasks);
+    load_config_file(mtNtp);
   }
 }
 
@@ -1586,22 +1627,10 @@ static void handleGetConfigSchedulerPage()
 static void handleReadTasksSetting()
 {
   // clear() обязателен: иначе createNestedArray добавит второй t_list
-  static StaticJsonDocument<CONFIG_SIZE> doc;
+  static DynamicJsonDocument doc(CONFIG_SIZE);
   doc.clear();
 
-  JsonArray tasks = doc.createNestedArray(sr_t_list_str);
-  if (tasksArray != NULL)
-  {
-    for (uint8_t i = 0; i < tasksCount; i++)
-    {
-      JsonObject task = tasks.createNestedObject();
-      task[sr_state_str] = (uint8_t)tasksArray[i].task_status;
-      task[sr_time_str] = tasksArray[i].time_for_task;
-      task[sr_rel_str] = tasksArray[i].relay_index;
-      task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
-      task[sr_rep_str] = (uint8_t)tasksArray[i].periodicity;
-    }
-  }
+  get_config_json_doc(doc, mtTasks);
   doc[sr_tmax_str] = MAX_TASKS_COUNT;
 
   JsonArray relays = doc.createNestedArray(sr_r_list_str);
@@ -1620,13 +1649,13 @@ static void handleReadTasksSetting()
 
 static void handleWriteTasksSetting()
 {
-  if (!http_server->hasArg("plain"))
+  if (!http_server->hasArg(F("plain")))
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
     return;
   }
 
-  String json = http_server->arg("plain");
+  String json = http_server->arg(F("plain"));
 
   // проверяем, что пришедший текст действительно валидный JSON
   // с массивом t_list — иначе не сохраняем, чтобы не затереть рабочий список
@@ -1639,31 +1668,7 @@ static void handleWriteTasksSetting()
     return;
   }
 
-  // лимит задач — проверка ДО изменения списка, чтобы старый остался целым
-  size_t count = doc[sr_t_list_str].size();
-  if (count > MAX_TASKS_COUNT)
-  {
-    http_server->send(400, FPSTR(TEXT_PLAIN), F("TOO MANY"));
-    return;
-  }
-
-  delete[] tasksArray;
-  tasksArray = NULL;
-  tasksArray = new (std::nothrow) shSchedulerData[count];
-
-  tasksCount = 0;
-  if (tasksArray != NULL)
-  {
-    for (JsonObject t_list_item : doc[sr_t_list_str].as<JsonArray>())
-    {
-      tasksArray[tasksCount].task_status = t_list_item[sr_state_str].as<bool>();
-      tasksArray[tasksCount].time_for_task = t_list_item[sr_time_str].as<uint32_t>();
-      tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
-      tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
-      tasksArray[tasksCount].periodicity = (task_periodicity)t_list_item[sr_rep_str].as<uint8_t>();
-      tasksCount++;
-    }
-  }
+  load_setting(mtTasks, doc);
 
   save_config_file(mtTasks, doc);
 
@@ -1689,13 +1694,13 @@ static void handleReadTimeData()
 
 static void handleWriteTimeData()
 {
-  if (http_server->hasArg("plain") == false)
+  if (http_server->hasArg(F("plain")) == false)
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
     return;
   }
 
-  String json = http_server->arg("plain");
+  String json = http_server->arg(F("plain"));
 
   StaticJsonDocument<256> doc;
 
@@ -1723,11 +1728,9 @@ static void handleWriteTimeData()
 
 static void handleReadNtpData()
 {
-  StaticJsonDocument<512> doc;
-  doc[sr_ntp_enabled_str] = (uint8_t)ntp_enabled;
-  doc[sr_ntp_server1_str] = ntp_server1;
-  doc[sr_ntp_server2_str] = ntp_server2;
-  doc[sr_ntp_server3_str] = ntp_server3;
+  DynamicJsonDocument doc(512);
+
+  get_config_json_doc(doc, mtNtp);
 
   String json = "";
   serializeJson(doc, json);
@@ -1736,13 +1739,13 @@ static void handleReadNtpData()
 
 static void handleWriteNtpData()
 {
-  if (!http_server->hasArg("plain"))
+  if (!http_server->hasArg(F("plain")))
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
     return;
   }
 
-  String json = http_server->arg("plain");
+  String json = http_server->arg(F("plain"));
   DynamicJsonDocument doc(512);
 
   DeserializationError err = deserializeJson(doc, json);
@@ -1753,24 +1756,7 @@ static void handleWriteNtpData()
   }
 
   // читаем новые значения
-  ntp_enabled = doc[sr_ntp_enabled_str].as<bool>();
-  const char *s1 = doc[sr_ntp_server1_str].as<const char *>();
-  const char *s2 = doc[sr_ntp_server2_str].as<const char *>();
-  const char *s3 = doc[sr_ntp_server3_str].as<const char *>();
-
-  // обновляем глобальные переменные
-  if (s1 && strlen(s1) > 0)
-    ntp_server1 = s1;
-  if (s2 && strlen(s2) > 0)
-    ntp_server2 = s2;
-  if (s3 && strlen(s3) > 0)
-    ntp_server3 = s3;
-
-  // применяем новые NTP настройки
-  if (ntp_enabled)
-  {
-    configTzTime("UTC", ntp_server1, ntp_server2, ntp_server3);
-  }
+  load_setting(mtNtp, doc);
 
   // сохраняем настройки
   save_config_file(mtNtp, doc);
@@ -1785,14 +1771,14 @@ static void getStringValue(String &_var, String _val)
 
 static void handleSetConfig()
 {
-  if (http_server->hasArg("plain") == false)
+  if (http_server->hasArg(F("plain")) == false)
   {
     http_server->send(200, FPSTR(TEXT_PLAIN), F("Body not received"));
     SR_PRINTLN(F("Failed to save configuration data, no data"));
     return;
   }
 
-  String json = http_server->arg("plain");
+  String json = http_server->arg(F("plain"));
 
   DynamicJsonDocument doc(CONFIG_SIZE);
 
@@ -1828,9 +1814,9 @@ static void handleSetConfig()
 
 static void handleRelaySwitch()
 {
-  if (http_server->hasArg("plain"))
+  if (http_server->hasArg(F("plain")))
   {
-    String json = http_server->arg("plain");
+    String json = http_server->arg(F("plain"));
 
     int8_t index = get_argument(json, sr_relay_str).toInt();
 
@@ -1845,9 +1831,9 @@ static void handleRelaySwitch()
 
 static void handleRemoteRelaySwitch()
 {
-  if (http_server->hasArg("plain"))
+  if (http_server->hasArg(F("plain")))
   {
-    String json = http_server->arg("plain");
+    String json = http_server->arg(F("plain"));
 
     int8_t index = get_argument(json, sr_relay_str).toInt();
 
@@ -1889,17 +1875,22 @@ static void handleRestartModule()
 
 static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
 {
-  getStringValue(module_description, doc[sr_module_description_str].as<String>());
-  getStringValue(module_name, doc[sr_module_name_str].as<String>());
-  udpPort = doc[sr_udp_port_str].as<uint16_t>();
-  if (udpPort == 0)
+  if ((uint8_t)_mdt <= 1)
   {
-    udpPort = DEFAULT_UDP_PORT;
+    // только для mtRelay и mtSwitch
+    getStringValue(module_description, doc[sr_module_description_str].as<String>());
+    getStringValue(module_name, doc[sr_module_name_str].as<String>());
+    udpPort = doc[sr_udp_port_str].as<uint16_t>();
+    if (udpPort == 0)
+    {
+      udpPort = DEFAULT_UDP_PORT;
+    }
   }
-  int8_t x = doc[sr_relays_str].size();
+  int8_t x;
   switch (_mdt)
   {
   case mtRelay:
+    x = doc[sr_relays_str].size();
     save_state_of_relay = doc[sr_save_state_str].as<bool>();
     for (int8_t i = 0; i < x && i < relayCount; i++)
     {
@@ -1910,7 +1901,9 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
       relayArray[i].relayLastState = doc[sr_relays_str][i][sr_last_state_str].as<bool>();
     }
     break;
+
   case mtSwitch:
+    x = doc[sr_relays_str].size();
     for (int8_t i = 0; i < x && i < switchCount; i++)
     {
       getStringValue(switchArray[i].relayName,
@@ -1924,6 +1917,48 @@ static bool load_setting(ModuleType _mdt, DynamicJsonDocument &doc)
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
     checkInterval = doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
+    break;
+
+  case mtTasks:
+    // лимит задач — проверка ДО изменения списка, чтобы старый остался целым
+    uint8_t count;
+    count = doc[sr_t_list_str].size();
+    if (count > MAX_TASKS_COUNT)
+    {
+      http_server->send(400, FPSTR(TEXT_PLAIN), F("TOO MANY"));
+      return (false);
+    }
+
+    delete[] tasksArray;
+    tasksArray = NULL;
+    tasksArray = new (std::nothrow) shSchedulerData[count];
+
+    tasksCount = 0;
+    if (tasksArray != NULL)
+    {
+      for (JsonObject t_list_item : doc[sr_t_list_str].as<JsonArray>())
+      {
+        tasksArray[tasksCount].task_status = t_list_item[sr_state_str].as<bool>();
+        tasksArray[tasksCount].time_for_task = t_list_item[sr_time_str].as<uint32_t>();
+        tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
+        tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
+        tasksArray[tasksCount].periodicity = (task_periodicity)t_list_item[sr_rep_str].as<uint8_t>();
+        tasksCount++;
+      }
+    }
+    break;
+
+  case mtNtp:
+    ntp_enabled = doc[sr_ntp_enabled_str].as<bool>();
+    ntp_server1 = doc[sr_ntp_server1_str].as<String>().c_str();
+    ntp_server2 = doc[sr_ntp_server2_str].as<String>().c_str();
+    ntp_server3 = doc[sr_ntp_server3_str].as<String>().c_str();
+
+    // применяем новые NTP настройки
+    if (ntp_enabled)
+    {
+      configTzTime("UTC", ntp_server1, ntp_server2, ntp_server3);
+    }
     break;
   default:
     return (false);
