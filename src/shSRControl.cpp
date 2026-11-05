@@ -134,7 +134,7 @@ static bool ntp_enabled = true;
 static const char *ntp_server1 = "ru.pool.ntp.org";
 static const char *ntp_server2 = "pool.ntp.org";
 static const char *ntp_server3 = "time.google.com";
-static time_t tz_offset = 10800;
+static int32_t tz_offset = 10800;
 
 static String module_description = "";
 static String module_name = "";
@@ -185,6 +185,10 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
 static void clearListOfRemoteRelays();
 
 // ===================================================
+static void checkTasksList(ModuleType _mdt);
+static bool check_day_of_week(uint8_t _day, task_periodicity _per);
+
+// ===================================================
 static void handleGetConfigPage(String arg, String page);
 static void handleGetRelayConfigPage();
 static void handleGetSwitchConfigPage();
@@ -197,6 +201,7 @@ static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 static void handleGetListOfRemoteRelays();
 
+static void setHttpHandleForScheduler();
 static void handleGetConfigSchedulerPage();
 static void handleReadTasksSetting();
 static void handleWriteTasksSetting();
@@ -231,6 +236,17 @@ static String get_config_file_name(ModuleType _mdt);
 static bool save_config_file(ModuleType _mdt);
 static bool save_config_file(ModuleType _mdt, DynamicJsonDocument &doc);
 static bool load_config_file(ModuleType _mdt);
+
+
+// оператор сравнения двух задач (если понадобится определять дубликаты)
+bool operator==(const shSchedulerData &a, const shSchedulerData &b)
+{
+  return (a.task_status == b.task_status &&
+          a.time_for_task == b.time_for_task &&
+          a.relay_index == b.relay_index &&
+          a.action_for_relay == b.action_for_relay &&
+          a.periodicity == b.periodicity);
+}
 
 // ==== shRelayControl class ===========================
 
@@ -377,28 +393,15 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
     http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
     // перезагрузка модуля
     http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
-    if (tasks_config_page.length() > 0)
-    {
-      // вызов страницы настройки планировщика
-      http_server->on(tasks_config_page, HTTP_GET, &handleGetConfigSchedulerPage);
-      // заполнение списка задач
-      http_server->on(FPSTR(TASK_LIST_GET), HTTP_GET, handleReadTasksSetting);
-      // сохранение списка задач
-      http_server->on(FPSTR(TASK_LIST_SET), HTTP_POST, handleWriteTasksSetting);
-      // получение времени модуля
-      http_server->on(FPSTR(TIME_DATA), HTTP_GET, handleReadTimeData);
-      // сохранение времени модуля
-      http_server->on(FPSTR(TIME_DATA), HTTP_POST, handleWriteTimeData);
-      // получение NTP настроек
-      http_server->on(FPSTR(NTP_DATA), HTTP_GET, handleReadNtpData);
-      // сохранение NTP настроек
-      http_server->on(FPSTR(NTP_DATA), HTTP_POST, handleWriteNtpData);
-    }
+
+    // настройка web-интерфейса планировщика задач
+    setHttpHandleForScheduler();
   }
 }
 
 void shRelayControl::tick()
 {
+  // опрос кнопок
   for (uint8_t i = 0; i < relayCount; i++)
   {
     if (relayArray[i].relayButton != NULL &&
@@ -409,6 +412,15 @@ void shRelayControl::tick()
     }
   }
 
+  // проверка списка планировщика задач
+  static unsigned long tasks_timer = 0;
+  if (millis() - tasks_timer >= 1000ul)
+  {
+    tasks_timer = millis();
+    checkTasksList(mtRelay);
+  }
+
+  // проверка входящих udp-пакетов
   if (udp != NULL)
   {
     int packet_size = udp->parsePacket();
@@ -418,6 +430,7 @@ void shRelayControl::tick()
     }
   }
 
+  // обработка запросов сервера
   if (http_server)
   {
     http_server->handleClient();
@@ -764,17 +777,23 @@ void shSwitchControl::startDevice(WiFiUDP *_udp)
 void shSwitchControl::attachWebInterface(shWebServer *_server,
                                          FS *_file_system,
                                          const String &_relay_config_page,
+                                         const String &_tasks_config_page,
                                          const String &_wifi_config_page)
 {
   http_server = _server;
   file_system = _file_system;
 
   relay_config_page = _relay_config_page;
+  tasks_config_page = _tasks_config_page;
   wifi_config_page = _wifi_config_page;
 
   if (relay_config_page.indexOf("/") != 0)
   {
     relay_config_page = "/" + relay_config_page;
+  }
+  if (tasks_config_page.length() > 0 && tasks_config_page.indexOf("/") != 0)
+  {
+    tasks_config_page = "/" + tasks_config_page;
   }
   if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
   {
@@ -798,11 +817,15 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
     http_server->on(FPSTR(REMOTE_RELAY_SWITCH), HTTP_POST, handleRemoteRelaySwitch);
     // перезагрузка модуля
     http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
+
+    // настройка web-интерфейса планировщика задач
+    setHttpHandleForScheduler();
   }
 }
 
 void shSwitchControl::tick()
 {
+  // опрос кнопок
   for (uint8_t i = 0; i < switchCount; i++)
   {
     if (switchArray[i].relayButton != NULL &&
@@ -813,6 +836,14 @@ void shSwitchControl::tick()
     }
   }
 
+  // проверка списка планировщика задач
+  static unsigned long tasks_timer = 0;
+  if (millis() - tasks_timer >= 1000ul)
+  {
+    tasks_timer = millis();
+    checkTasksList(mtSwitch);
+  }
+
   // проверка доступности реле через заданный интервал
   static unsigned long checkTimer = 0;
   if (checkInterval > 0 && millis() - checkTimer >= checkInterval)
@@ -821,6 +852,7 @@ void shSwitchControl::tick()
     find_remote_relays();
   }
 
+  // проверка входящих udp-пакетов
   if (udp != NULL)
   {
     int packet_size = udp->parsePacket();
@@ -830,6 +862,7 @@ void shSwitchControl::tick()
     }
   }
 
+  // обработка запросов сервера
   if (http_server)
   {
     http_server->handleClient();
@@ -1327,6 +1360,66 @@ static void clearListOfRemoteRelays()
   }
 }
 
+// ==== обработка списка заданий планировщика ========
+static bool check_day_of_week(uint8_t _day, task_periodicity _per)
+{
+  // в структуре tm день недели кодируется 0(вск)..6(сбт)
+  // у нас день недели кодируется 0(пнд)..6(вск)
+  // поэтому приводим день недели к нужному виду
+  _day = (_day) ? --_day : 6;
+  // проверяем наличие нужного бита и возвращаем результат
+  return ((uint8_t)_per & 1 << _day);
+}
+
+static void checkTasksList(ModuleType _mdt)
+{
+  if (tasksArray != NULL && tasksCount > 0)
+  {
+    tm m_time;
+    if (getLocalTime(&m_time))
+    {
+      bool is_changed = false;
+      // получаем текущее время в секундах с учетом сдвига по часовому поясу
+      int32_t cur_time = (uint32_t)m_time.tm_hour * 3600ul + (uint32_t)m_time.tm_min * 60ul + (uint32_t)m_time.tm_sec + tz_offset;
+      //  проверка на переход за полночь после сдвига по часовому поясу
+      cur_time = (cur_time < 86400ul) ? ((cur_time >= 0) ? cur_time : cur_time + 86400ul)
+                                      : cur_time - 86400ul;
+      for (uint8_t i = 0; i < tasksCount; i++)
+      {
+        if ((tasksArray[i].task_status) &&
+            ((tasksArray[i].time_for_task * 60) == cur_time))
+        {
+          if (tasksArray[i].periodicity == TP_DAILY ||
+              tasksArray[i].periodicity == TP_ONCE ||
+              check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].periodicity))
+          {
+            switch (_mdt)
+            {
+            case mtRelay:
+              set_local_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
+              break;
+            case mtSwitch:
+              set_remote_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
+              break;
+            default:
+              break;
+            }
+            if (tasksArray[i].periodicity == TP_ONCE)
+            {
+              tasksArray[i].task_status = false;
+              is_changed = true;
+            }
+          }
+        }
+      }
+      if (is_changed)
+      {
+        // TODO: не забыть сделать сохранение списка задач, если были изменения статуса
+      }
+    }
+  }
+}
+
 // ==== реакции сервера ==============================
 static void handleGetConfigPage(String arg, String page)
 {
@@ -1464,6 +1557,27 @@ static void handleGetListOfRemoteRelays()
   handleGetConfig(res);
 }
 
+static void setHttpHandleForScheduler()
+{
+  if (tasks_config_page.length() > 0)
+  {
+    // вызов страницы настройки планировщика
+    http_server->on(tasks_config_page, HTTP_GET, &handleGetConfigSchedulerPage);
+    // заполнение списка задач
+    http_server->on(FPSTR(TASK_LIST_GET), HTTP_GET, handleReadTasksSetting);
+    // сохранение списка задач
+    http_server->on(FPSTR(TASK_LIST_SET), HTTP_POST, handleWriteTasksSetting);
+    // получение времени модуля
+    http_server->on(FPSTR(TIME_DATA), HTTP_GET, handleReadTimeData);
+    // сохранение времени модуля
+    http_server->on(FPSTR(TIME_DATA), HTTP_POST, handleWriteTimeData);
+    // получение NTP настроек
+    http_server->on(FPSTR(NTP_DATA), HTTP_GET, handleReadNtpData);
+    // сохранение NTP настроек
+    http_server->on(FPSTR(NTP_DATA), HTTP_POST, handleWriteNtpData);
+  }
+}
+
 static void handleGetConfigSchedulerPage()
 {
   http_server->send(200, FPSTR(TEXT_HTML), FPSTR(TASK_LIST_PAGE));
@@ -1476,7 +1590,6 @@ static void handleReadTasksSetting()
   doc.clear();
 
   JsonArray tasks = doc.createNestedArray(sr_t_list_str);
-  doc[sr_tmax_str] = MAX_TASKS_COUNT;
   if (tasksArray != NULL)
   {
     for (uint8_t i = 0; i < tasksCount; i++)
@@ -1489,6 +1602,7 @@ static void handleReadTasksSetting()
       task[sr_rep_str] = (uint8_t)tasksArray[i].periodicity;
     }
   }
+  doc[sr_tmax_str] = MAX_TASKS_COUNT;
 
   JsonArray relays = doc.createNestedArray(sr_r_list_str);
   if (relayNameList != NULL)
@@ -1630,7 +1744,7 @@ static void handleWriteNtpData()
 
   String json = http_server->arg("plain");
   DynamicJsonDocument doc(512);
-  
+
   DeserializationError err = deserializeJson(doc, json);
   if (err)
   {
