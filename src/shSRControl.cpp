@@ -221,8 +221,8 @@ static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
                                 const IPAddress _ip);
-static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl);
-static String get_config_json_string(srModuleType _mdl);
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt);
+static String get_config_json_string(srModuleType _mdt);
 
 static void handleSetConfig();
 
@@ -1508,10 +1508,11 @@ static void get_relay_data_json(JsonObject &rel,
   rel[sr_ip_addr_str] = _ip.toString();
 }
 
-static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
 {
-  if ((uint8_t)_mdl <= 1)
+  if ((uint8_t)_mdt <= 1)
   {
+    // только для mtRelay и mtSwitch
     doc[sr_module_description_str] = module_description;
     doc[sr_module_name_str] = module_name;
     doc[sr_udp_port_str] = udpPort;
@@ -1520,7 +1521,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
     doc[sr_tasksconf_str] = tasks_config_page;
   }
 
-  switch (_mdl)
+  switch (_mdt)
   {
   case mtRelay:
   {
@@ -1580,6 +1581,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
     doc[sr_ntp_server1_str] = ntp_server1;
     doc[sr_ntp_server2_str] = ntp_server2;
     doc[sr_ntp_server3_str] = ntp_server3;
+    doc[sr_tz_str] = tz_offset;
   }
   break;
 
@@ -1588,11 +1590,11 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
   }
 }
 
-static String get_config_json_string(srModuleType _mdl)
+static String get_config_json_string(srModuleType _mdt)
 {
   DynamicJsonDocument doc(CONFIG_SIZE);
 
-  get_config_json_doc(doc, _mdl);
+  get_config_json_doc(doc, _mdt);
 
   String _res = "";
   serializeJson(doc, _res);
@@ -1745,9 +1747,16 @@ static void handleWriteTimeData()
     struct timeval tv = {.tv_sec = (time_t)doc[sr_unix_str].as<uint32_t>(),
                          .tv_usec = (suseconds_t)doc[sr_ms_str].as<uint32_t>() * 1000};
     settimeofday(&tv, nullptr);
-    tz_offset = doc[sr_tz_str].as<int32_t>();
+    int32_t tz = doc[sr_tz_str].as<int32_t>();
+    bool save_ntp = (tz != tz_offset);
+    tz_offset = tz;
+    // если изменилось смещение по часовому поясу, пересохранить настройки 
+    // NTP - смещение сохраняется там
+    if (save_ntp)
+    {
+      save_config_file(mtNtp);
+    }
 
-    // получение [UTC] времени
     tm m_time;
     if (!getLocalTime(&m_time))
     {
@@ -1954,14 +1963,11 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
     break;
 
   case mtTasks:
-    // лимит задач — проверка ДО изменения списка, чтобы старый остался целым
+  { // проверяем лимит задач, если нужно, ограничиваем размер
     uint8_t count;
-    count = doc[sr_t_list_str].size();
-    if (count > MAX_TASKS_COUNT)
-    {
-      http_server->send(400, FPSTR(TEXT_PLAIN), F("TOO MANY"));
-      return (false);
-    }
+    count = (doc[sr_t_list_str].size() > MAX_TASKS_COUNT)
+                ? MAX_TASKS_COUNT
+                : doc[sr_t_list_str].size();
 
     delete[] tasksArray;
     tasksArray = NULL;
@@ -1977,17 +1983,23 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
         tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
         tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
         tasksArray[tasksCount].task_repeat = (shTaskRepeat)t_list_item[sr_rep_str].as<uint8_t>();
-        tasksCount++;
+        if (++tasksCount >= count)
+        {
+          // загружаем не более разрешенного количества
+          return (true);
+        }
       }
     }
-    break;
+  }
+  break;
 
   case mtNtp:
   {
     ntp_enabled = doc[sr_ntp_enabled_str].as<bool>();
-    ntp_server1 = doc["ntp_server1"].as<String>();
-    ntp_server2 = doc["ntp_server2"].as<String>();
-    ntp_server3 = doc["ntp_server3"].as<String>();
+    ntp_server1 = doc[sr_ntp_server1_str].as<String>();
+    ntp_server2 = doc[sr_ntp_server2_str].as<String>();
+    ntp_server3 = doc[sr_ntp_server3_str].as<String>();
+    tz_offset = doc[sr_tz_str].as<int32_t>();
 
     // применяем новые NTP настройки
     if (ntp_enabled)
