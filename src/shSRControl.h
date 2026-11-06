@@ -375,6 +375,78 @@ public:
    * @return false
    */
   bool loadConfig();
+
+  /**
+   * @brief установить время модуля (без смещения по часовому поясу)
+   *
+   * @param _now время в формате unix time
+   */
+  void setTimeToModule(time_t _now);
+
+  /**
+   * @brief получить текущее время модуля (без смещения по часовому поясу)
+   *
+   * @return time_t время в формате unix time
+   */
+  time_t getTimeFromModule();
+
+  /**
+   * @brief установить смещение времени по часовому поясу
+   *
+   * @param _tz смещение в минутах
+   */
+  void setTimeZoneOffset(time_t _tz);
+
+  /**
+   * @brief получить текущее смещение времени по часовому поясу
+   *
+   * @return time_t смещение в минутах
+   */
+  time_t getTimeZoneOffset();
+
+  /**
+   * @brief установка данных для работы с NTP-серверами
+   *
+   * @param _enabled включение/отключение работы с NTP-серверами
+   * @param _tz смещение времени по часовому поясу в минутах (по умолчанию - 3 часа, Московское время)
+   * @param _ntp_srv1 первый NTP-сервер
+   * @param _ntp_srv2 второй NTP-сервер
+   * @param _ntp_srv3 третий NTP-сервер
+   */
+  void setNtpData(bool _enabled,
+                  time_t _tz = 180,
+                  String _ntp_srv1 = "",
+                  String _ntp_srv2 = "",
+                  String _ntp_srv3 = "");
+
+  /**
+   * @brief получить статус работы с NTP-серверами
+   *
+   * @return true - включено
+   * @return false - выключено
+   */
+  bool getNtpStatus();
+
+  /**
+   * @brief получить первый NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer1();
+
+  /**
+   * @brief получить второй NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer2();
+
+  /**
+   * @brief получить третий NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer3();
 };
 
 // ==== shSwitchControl class ==========================
@@ -635,6 +707,78 @@ public:
    * @return false
    */
   bool loadConfig();
+
+  /**
+   * @brief установить время модуля (без смещения по часовому поясу)
+   *
+   * @param _now время в формате unix time
+   */
+  void setTimeToModule(time_t _now);
+
+  /**
+   * @brief получить текущее время модуля (без смещения по часовому поясу)
+   *
+   * @return time_t время в формате unix time
+   */
+  time_t getTimeFromModule();
+
+  /**
+   * @brief установить смещение времени по часовому поясу
+   *
+   * @param _tz смещение в минутах
+   */
+  void setTimeZoneOffset(time_t _tz);
+
+  /**
+   * @brief получить текущее смещение времени по часовому поясу
+   *
+   * @return time_t смещение в минутах
+   */
+  time_t getTimeZoneOffset();
+
+  /**
+   * @brief установка данных для работы с NTP-серверами
+   *
+   * @param _enabled включение/отключение работы с NTP-серверами
+   * @param _tz смещение времени по часовому поясу в минутах (по умолчанию - 3 часа, Московское время)
+   * @param _ntp_srv1 первый NTP-сервер
+   * @param _ntp_srv2 второй NTP-сервер
+   * @param _ntp_srv3 третий NTP-сервер
+   */
+  void setNtpData(bool _enabled,
+                  time_t _tz = 180,
+                  String _ntp_srv1 = "",
+                  String _ntp_srv2 = "",
+                  String _ntp_srv3 = "");
+
+  /**
+   * @brief получить статус работы с NTP-серверами
+   *
+   * @return true - включено
+   * @return false - выключено
+   */
+  bool getNtpStatus();
+
+  /**
+   * @brief получить первый NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer1();
+
+  /**
+   * @brief получить второй NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer2();
+
+  /**
+   * @brief получить третий NTP-сервер
+   *
+   * @return String
+   */
+  String getNtpServer3();
 };
 
 // ==== shBuzzer class ===============================

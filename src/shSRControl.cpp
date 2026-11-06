@@ -1,3 +1,8 @@
+#if defined(ARDUINO_ARCH_ESP8266)
+#include <sntp.h>
+#elif defined(ARDUINO_ARCH_ESP32)
+#include <lwip/apps/sntp.h>
+#endif
 #include "shSRControl.h"
 #include <new>
 #include <time.h>
@@ -136,7 +141,7 @@ static bool ntp_enabled = true;
 static String ntp_server1 = "ru.pool.ntp.org";
 static String ntp_server2 = "pool.ntp.org";
 static String ntp_server3 = "time.google.com";
-static int32_t tz_offset = 10800;
+static time_t tz_offset = 10800;
 
 static String module_description = "";
 static String module_name = "";
@@ -190,6 +195,14 @@ static void clearListOfRemoteRelays();
 static void checkTasksList(srModuleType _mdt);
 static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
 static void getRelayNameList();
+static void set_local_time(time_t _now);
+static time_t get_local_time();
+static void set_time_zone_offset(time_t _tz);
+static void set_ntp_data(bool _ntp_enabled,
+                         time_t _tz = 180,
+                         String _ntp_server1 = "",
+                         String _ntp_server2 = "",
+                         String _ntp_server3 = "");
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -694,6 +707,55 @@ bool shRelayControl::loadConfig()
   return (load_config_file(mtRelay));
 }
 
+void shRelayControl::setTimeToModule(time_t _now)
+{
+  set_local_time(_now);
+}
+
+time_t shRelayControl::getTimeFromModule()
+{
+  return get_local_time();
+}
+
+void shRelayControl::setTimeZoneOffset(time_t _tz)
+{
+  set_time_zone_offset(_tz);
+}
+
+time_t shRelayControl::getTimeZoneOffset()
+{
+  return tz_offset / 60;
+}
+
+void shRelayControl::setNtpData(bool _enabled,
+                                time_t _tz,
+                                String _ntp_srv1,
+                                String _ntp_srv2,
+                                String _ntp_srv3)
+{
+  set_ntp_data(_enabled, _tz, _ntp_srv1, _ntp_srv2, _ntp_srv3);
+}
+
+bool shRelayControl::getNtpStatus()
+{
+  return ntp_enabled;
+}
+
+String shRelayControl::getNtpServer1()
+{
+  return ntp_server1;
+}
+
+String shRelayControl::getNtpServer2()
+{
+  return ntp_server2;
+}
+
+String shRelayControl::getNtpServer3()
+{
+  return ntp_server3;
+}
+
 // ==== shSwitchControl class ==========================
 
 shSwitchControl::shSwitchControl() { moduleFlag = mtSwitch; }
@@ -1095,6 +1157,56 @@ bool shSwitchControl::loadConfig()
   return (load_config_file(mtSwitch));
 }
 
+void shSwitchControl::setTimeToModule(time_t _now)
+{
+  set_local_time(_now);
+}
+
+time_t shSwitchControl::getTimeFromModule()
+{
+  return get_local_time();
+}
+
+void shSwitchControl::setTimeZoneOffset(time_t _tz)
+{
+  set_time_zone_offset(_tz);
+}
+
+time_t shSwitchControl::getTimeZoneOffset()
+{
+  return tz_offset / 60;
+}
+
+void shSwitchControl::setNtpData(bool _enabled,
+                                 time_t _tz,
+                                 String _ntp_srv1,
+                                 String _ntp_srv2,
+                                 String _ntp_srv3)
+
+{
+  set_ntp_data(_enabled, _tz, _ntp_srv1, _ntp_srv2, _ntp_srv3);
+}
+
+bool shSwitchControl::getNtpStatus()
+{
+  return ntp_enabled;
+}
+
+String shSwitchControl::getNtpServer1()
+{
+  return ntp_server1;
+}
+
+String shSwitchControl::getNtpServer2()
+{
+  return ntp_server2;
+}
+
+String shSwitchControl::getNtpServer3()
+{
+  return ntp_server3;
+}
+
 // ===================================================
 
 static IPAddress get_broadcast_address()
@@ -1390,11 +1502,11 @@ static void checkTasksList(srModuleType _mdt)
   if (tasksArray != NULL && tasksCount > 0)
   {
     tm m_time;
-    if (getLocalTime(&m_time))
+    if (getLocalTime(&m_time, 0))
     {
       bool is_changed = false;
       // получаем текущее время в секундах с учетом сдвига по часовому поясу
-      int32_t cur_time = (uint32_t)m_time.tm_hour * 3600ul + (uint32_t)m_time.tm_min * 60ul + (uint32_t)m_time.tm_sec + tz_offset;
+      time_t cur_time = (time_t)m_time.tm_hour * 3600ul + (time_t)m_time.tm_min * 60ul + (time_t)m_time.tm_sec + tz_offset;
       //  проверка на переход за полночь после сдвига по часовому поясу
       cur_time = (cur_time < 86400ul) ? ((cur_time >= 0) ? cur_time : cur_time + 86400ul)
                                       : cur_time - 86400ul;
@@ -1450,6 +1562,65 @@ static void getRelayNameList()
   {
     relayNameList[i] = (moduleFlag == mtRelay) ? relayArray[i].relayName : switchArray[i].relayName;
   }
+}
+
+static void set_local_time(time_t _now)
+{
+  struct timeval tv = {.tv_sec = _now, .tv_usec = 0};
+  settimeofday(&tv, nullptr);
+}
+
+static time_t get_local_time()
+{
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+
+  return tv.tv_sec;
+}
+
+static void set_time_zone_offset(time_t _tz)
+{
+  // контроль данных: не меньше -12 часов (-720) и не больше 14 часов (840)
+  _tz = (_tz > 840) ? 840 * 60 : ((_tz < -720) ? -720 * 60 : _tz * 60);
+  bool is_change = (_tz != tz_offset);
+  tz_offset = _tz;
+  if (is_change)
+  {
+    save_config_file(mtNtp);
+  }
+}
+
+static void set_ntp_data(bool _ntp_enabled,
+                         time_t _tz,
+                         String _ntp_server1,
+                         String _ntp_server2,
+                         String _ntp_server3)
+{
+  ntp_enabled = _ntp_enabled;
+  tz_offset = _tz;
+  if (_ntp_server1.length() > 0)
+  {
+    ntp_server1 = _ntp_server1;
+  }
+  if (_ntp_server2.length() > 0)
+  {
+    ntp_server2 = _ntp_server2;
+  }
+  if (_ntp_server3.length() > 0)
+  {
+    ntp_server3 = _ntp_server3;
+  }
+
+  if (ntp_enabled)
+  {
+    configTzTime("UTC", ntp_server1.c_str(), ntp_server2.c_str(), ntp_server3.c_str());
+  }
+  else
+  {
+    sntp_stop();
+  }
+
+  save_config_file(mtNtp);
 }
 
 // ==== реакции сервера ==============================
@@ -1747,10 +1918,10 @@ static void handleWriteTimeData()
     struct timeval tv = {.tv_sec = (time_t)doc[sr_unix_str].as<uint32_t>(),
                          .tv_usec = (suseconds_t)doc[sr_ms_str].as<uint32_t>() * 1000};
     settimeofday(&tv, nullptr);
-    int32_t tz = doc[sr_tz_str].as<int32_t>();
+    int32_t tz = doc[sr_tz_str].as<time_t>();
     bool save_ntp = (tz != tz_offset);
     tz_offset = tz;
-    // если изменилось смещение по часовому поясу, пересохранить настройки 
+    // если изменилось смещение по часовому поясу, пересохранить настройки
     // NTP - смещение сохраняется там
     if (save_ntp)
     {
@@ -1758,7 +1929,7 @@ static void handleWriteTimeData()
     }
 
     tm m_time;
-    if (!getLocalTime(&m_time))
+    if (!getLocalTime(&m_time, 0))
     {
       http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
       return;
@@ -1999,12 +2170,16 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
     ntp_server1 = doc[sr_ntp_server1_str].as<String>();
     ntp_server2 = doc[sr_ntp_server2_str].as<String>();
     ntp_server3 = doc[sr_ntp_server3_str].as<String>();
-    tz_offset = doc[sr_tz_str].as<int32_t>();
+    tz_offset = doc[sr_tz_str].as<time_t>();
 
     // применяем новые NTP настройки
     if (ntp_enabled)
     {
       configTzTime("UTC", ntp_server1.c_str(), ntp_server2.c_str(), ntp_server3.c_str());
+    }
+    else
+    {
+      sntp_stop();
     }
   }
   break;
