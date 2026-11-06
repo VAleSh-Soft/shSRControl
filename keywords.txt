@@ -10,6 +10,8 @@ shRelayData	KEYWORD1
 shSwitchData	KEYWORD1
 shRelayControl	KEYWORD1
 shSwitchControl	KEYWORD1
+shTaskRepeat	KEYWORD1
+shSchedulerData	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2) 
@@ -49,9 +51,26 @@ loadConfige	KEYWORD2
 setCheckTimer	KEYWORD2
 getCheckTimer	KEYWORD2
 findRelays	KEYWORD2
+setTimeToModule	KEYWORD2
+getTimeFromModule	KEYWORD2
+setTimeZoneOffset	KEYWORD2
+getTimeZoneOffset	KEYWORD2
+setNtpData	KEYWORD2
+getNtpStatus	KEYWORD2
+getNtpServer1	KEYWORD2
+getNtpServer2	KEYWORD2
+getNtpServer3	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
 #######################################
 
-
+TP_ONCE	LITERAL1
+TP_MON_DAY	LITERAL1
+TP_TUE_DAY	LITERAL1
+TP_WED_DAY	LITERAL1
+TP_THU_DAY	LITERAL1
+TP_FRI_DAY  LITERAL1
+TP_SAT_DAY	LITERAL1
+TP_SUN_DAY	LITERAL1
+TP_DAILY	LITERAL1
