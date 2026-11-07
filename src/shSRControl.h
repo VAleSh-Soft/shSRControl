@@ -28,22 +28,22 @@ typedef ESP8266WebServer shWebServer;
 // описание флагов периодичности выполнения задачи
 enum shTaskRepeat : uint8_t
 {
-  TP_ONCE = 0x00,    // однократное срабатывание; 0b00000000
-  TP_MON_DAY = 0x01, // по понедельникам;         0b00000001
-  TP_TUE_DAY = 0x02, // по вторникам;             0b00000010
-  TP_WED_DAY = 0x04, // по средам;                0b00000100
-  TP_THU_DAY = 0x08, // по четвергам;             0b00001000
-  TP_FRI_DAY = 0x10, // по пятницам;              0b00010000
-  TP_SAT_DAY = 0x20, // по субботам;              0b00100000
-  TP_SUN_DAY = 0x40, // по воскресеньям;          0b01000000
-  TP_DAILY = 0x80    // ежедневное срабатывание;  0b10000000
+  TR_ONCE = 0x00,    // однократное срабатывание; 0b00000000
+  TR_MON_DAY = 0x01, // по понедельникам;         0b00000001
+  TR_TUE_DAY = 0x02, // по вторникам;             0b00000010
+  TR_WED_DAY = 0x04, // по средам;                0b00000100
+  TR_THU_DAY = 0x08, // по четвергам;             0b00001000
+  TR_FRI_DAY = 0x10, // по пятницам;              0b00010000
+  TR_SAT_DAY = 0x20, // по субботам;              0b00100000
+  TR_SUN_DAY = 0x40, // по воскресеньям;          0b01000000
+  TR_DAILY = 0x80    // ежедневное срабатывание;  0b10000000
 };
 
 // описание свойств задач планировщика
 struct shSchedulerData
 {
   bool task_status;         // статус задачи
-  uint32_t time_for_task;   // время срабатывания задачи
+  uint32_t time_for_task;   // время срабатывания задачи, минут с начала суток
   uint8_t relay_index;      // индекс реле задачи
   bool action_for_relay;    // действие с реле (включить/выключить)
   shTaskRepeat task_repeat; // периодичность выполнения задачи
@@ -447,6 +447,17 @@ public:
    * @return String
    */
   String getNtpServer3();
+
+  /**
+   * @brief добавление задачи в планировщик
+   *
+   * @param _task структура, описывающая задачу
+   * 
+   * @return true
+   * @return false
+   */
+  bool addTaskToList(shSchedulerData &_task);
+  
 };
 
 // ==== shSwitchControl class ==========================
@@ -779,6 +790,16 @@ public:
    * @return String
    */
   String getNtpServer3();
+
+  /**
+   * @brief добавление задачи в планировщик
+   *
+   * @param _task структура, описывающая задачу
+   * 
+   * @return true
+   * @return false
+   */
+  bool addTaskToList(shSchedulerData &_task);
 };
 
 // ==== shBuzzer class ===============================

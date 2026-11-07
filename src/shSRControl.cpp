@@ -194,6 +194,7 @@ static void clearListOfRemoteRelays();
 // ===================================================
 static void checkTasksList(srModuleType _mdt);
 static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
+static bool add_task_to_list(shSchedulerData &_task);
 static void getRelayNameList();
 static void set_local_time(time_t _now);
 static time_t get_local_time();
@@ -256,8 +257,9 @@ static bool load_config_file(srModuleType _mdt);
 // оператор сравнения двух задач (если понадобится определять дубликаты)
 bool operator==(const shSchedulerData &a, const shSchedulerData &b)
 {
-  return (a.task_status == b.task_status &&
-          a.time_for_task == b.time_for_task &&
+  // состояние статуса не учитываем, задача может быть активна или отключена
+  // тем не менее она остается той же самой задачей
+  return (a.time_for_task == b.time_for_task &&
           a.relay_index == b.relay_index &&
           a.action_for_relay == b.action_for_relay &&
           a.task_repeat == b.task_repeat);
@@ -756,6 +758,11 @@ String shRelayControl::getNtpServer3()
   return ntp_server3;
 }
 
+bool shRelayControl::addTaskToList(shSchedulerData &_task)
+{
+  return add_task_to_list(_task);
+}
+
 // ==== shSwitchControl class ==========================
 
 shSwitchControl::shSwitchControl() { moduleFlag = mtSwitch; }
@@ -1207,6 +1214,11 @@ String shSwitchControl::getNtpServer3()
   return ntp_server3;
 }
 
+bool shSwitchControl::addTaskToList(shSchedulerData &_task)
+{
+  return add_task_to_list(_task);
+}
+
 // ===================================================
 
 static IPAddress get_broadcast_address()
@@ -1515,8 +1527,8 @@ static void checkTasksList(srModuleType _mdt)
         if ((tasksArray[i].task_status) &&
             ((tasksArray[i].time_for_task * 60) == cur_time))
         {
-          if (tasksArray[i].task_repeat == TP_DAILY ||
-              tasksArray[i].task_repeat == TP_ONCE ||
+          if (tasksArray[i].task_repeat == TR_DAILY ||
+              tasksArray[i].task_repeat == TR_ONCE ||
               check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].task_repeat))
           {
             switch (_mdt)
@@ -1530,7 +1542,18 @@ static void checkTasksList(srModuleType _mdt)
             default:
               break;
             }
-            if (tasksArray[i].task_repeat == TP_ONCE)
+
+            SR_PRINTLN(F("The task has been executed successfully"));
+            SR_PRINT(F("time: "));
+            SR_PRINT(tasksArray[i].time_for_task / 60);
+            SR_PRINT(F(":"));
+            SR_PRINTLN(tasksArray[i].time_for_task % 60);
+            SR_PRINT(F("relay: "));
+            SR_PRINTLN(relayNameList[tasksArray[i].relay_index]);
+            SR_PRINT(F("action: "));
+            SR_PRINTLN(tasksArray[i].action_for_relay ? "on" : "off");
+
+            if (tasksArray[i].task_repeat == TR_ONCE)
             {
               tasksArray[i].task_status = false;
               is_changed = true;
@@ -1554,6 +1577,52 @@ static bool check_day_of_week(uint8_t _day, shTaskRepeat _per)
   _day = (_day) ? --_day : 6;
   // проверяем наличие нужного бита и возвращаем результат
   return ((uint8_t)_per & 1 << _day);
+}
+
+static bool add_task_to_list(shSchedulerData &_task)
+{
+  // если лимит количества задач достигнут, больше ничего не делать
+  if (tasksCount >= MAX_TASKS_COUNT)
+  {
+    SR_PRINTLN(F("Failed to add a task - the task limit has been reached"));
+    return false;
+  }
+
+  // контроль повторяемости задачи - если выбраны все дни недели, то
+  // установить ежедневный повтор
+  if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
+  {
+    _task.task_repeat = TR_DAILY;
+  }
+
+  // проверить наличие такой задачи
+  for (uint8_t i = 0; i < tasksCount; i++)
+  {
+    if (tasksArray[i] == _task)
+    {
+      // если такая задача найдена, устанавливаем статус задачи в соответствие с
+      // _task.task_status и считаем, что задача добавлена успешно
+      tasksArray[i].task_status = _task.task_status;
+      SR_PRINTLN(F("The task already exists, and its status has been updated accordingly"));
+      return save_config_file(mtTasks);
+    }
+  }
+
+  static DynamicJsonDocument doc(CONFIG_SIZE);
+  // если задача не была найдена, то добавляем ее в список
+  doc.clear();
+  get_config_json_doc(doc, mtTasks);
+  JsonObject task = doc[sr_t_list_str].as<JsonArray>().createNestedObject();
+  task[sr_state_str] = (uint8_t)_task.task_status;
+  task[sr_time_str] = _task.time_for_task;
+  task[sr_rel_str] = _task.relay_index;
+  task[sr_act_str] = (uint8_t)_task.action_for_relay;
+  task[sr_rep_str] = (uint8_t)_task.task_repeat;
+
+  load_setting(mtTasks, doc);
+  SR_PRINTLN(F("The task has been added successfully"));
+
+  return save_config_file(mtTasks, doc);
 }
 
 static void getRelayNameList()
@@ -1859,6 +1928,7 @@ static void handleWriteTasksSetting()
   if (!http_server->hasArg(F("plain")))
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
+    SR_PRINTLN(F("The task list could not be saved - the data was not received"));
     return;
   }
 
@@ -1872,6 +1942,7 @@ static void handleWriteTasksSetting()
   if (err || !doc["t_list"].is<JsonArray>())
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    SR_PRINTLN(F("The task list could not be saved - the JSON data format is incorrect"));
     return;
   }
 
@@ -1879,7 +1950,7 @@ static void handleWriteTasksSetting()
 
   save_config_file(mtTasks, doc);
 
-  http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save tasks list...</p>"));
+  http_server->send(200, FPSTR(TEXT_HTML), F("OK"));
 }
 
 static void handleReadTimeData()
@@ -1904,6 +1975,7 @@ static void handleWriteTimeData()
   if (http_server->hasArg(F("plain")) == false)
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    SR_PRINTLN(F("The time could not be synchronized - the data was not received"));
     return;
   }
 
@@ -1937,6 +2009,11 @@ static void handleWriteTimeData()
     http_server->send(200, FPSTR(TEXT_PLAIN), F("OK"));
     return;
   }
+  else
+  {
+    SR_PRINTLN(F("The time could not be synchronized - the JSON data format is incorrect"));
+  }
+
   http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
 }
 
@@ -1956,6 +2033,7 @@ static void handleWriteNtpData()
   if (!http_server->hasArg(F("plain")))
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("NO"));
+    SR_PRINTLN(F("Failed to save NTP data - no data was received"));
     return;
   }
 
@@ -1966,6 +2044,7 @@ static void handleWriteNtpData()
   if (err)
   {
     http_server->send(400, FPSTR(TEXT_PLAIN), F("BAD JSON"));
+    SR_PRINTLN(F("Failed to save NTP data - the JSON data format is incorrect"));
     return;
   }
   // читаем новые значения
@@ -1974,7 +2053,7 @@ static void handleWriteNtpData()
   // сохраняем настройки
   save_config_file(mtNtp, doc);
 
-  http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save NTP settings...</p>"));
+  http_server->send(200, FPSTR(TEXT_HTML), F("OK"));
 }
 
 static void getStringValue(String &_var, String _val)
