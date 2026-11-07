@@ -21,32 +21,41 @@ typedef WebServer shWebServer;
 typedef ESP8266WebServer shWebServer;
 #endif
 
-#define DEFAULT_UDP_PORT 54321        // номер порта по умолчанию для обмена udp-пакетами
-#define DEFAULT_CHECK_INTERVAL 60000  // интервал опроса удаленных реле модулем выключателя, миллисекунд
-#define SIZE_LIST_OF_REMOTE_RELAYS 10 // максимальный размер списка доступных в сети удаленных реле
+#define DEFAULT_UDP_PORT 54321         // номер порта по умолчанию для обмена udp-пакетами
+#define DEFAULT_CHECK_INTERVAL 60000ul // интервал опроса удаленных реле модулем выключателя, миллисекунд
+#define SIZE_LIST_OF_REMOTE_RELAYS 10  // максимальный размер списка доступных в сети удаленных реле
 
 // описание флагов периодичности выполнения задачи
 enum shTaskRepeat : uint8_t
 {
-  TP_ONCE = 0x00,    // однократное срабатывание; 0b00000000
-  TP_MON_DAY = 0x01, // по понедельникам;         0b00000001
-  TP_TUE_DAY = 0x02, // по вторникам;             0b00000010
-  TP_WED_DAY = 0x04, // по средам;                0b00000100
-  TP_THU_DAY = 0x08, // по четвергам;             0b00001000
-  TP_FRI_DAY = 0x10, // по пятницам;              0b00010000
-  TP_SAT_DAY = 0x20, // по субботам;              0b00100000
-  TP_SUN_DAY = 0x40, // по воскресеньям;          0b01000000
-  TP_DAILY = 0x80    // ежедневное срабатывание;  0b10000000
+  TR_ONCE = 0x00,    // однократное срабатывание; 0b00000000
+  TR_MON_DAY = 0x01, // по понедельникам;         0b00000001
+  TR_TUE_DAY = 0x02, // по вторникам;             0b00000010
+  TR_WED_DAY = 0x04, // по средам;                0b00000100
+  TR_THU_DAY = 0x08, // по четвергам;             0b00001000
+  TR_FRI_DAY = 0x10, // по пятницам;              0b00010000
+  TR_SAT_DAY = 0x20, // по субботам;              0b00100000
+  TR_SUN_DAY = 0x40, // по воскресеньям;          0b01000000
+  TR_DAILY = 0x80    // ежедневное срабатывание;  0b10000000
 };
 
 // описание свойств задач планировщика
 struct shSchedulerData
 {
   bool task_status;         // статус задачи
-  uint32_t time_for_task;   // время срабатывания задачи
+  uint32_t time_for_task;   // время срабатывания задачи, минут с начала суток
   uint8_t relay_index;      // индекс реле задачи
   bool action_for_relay;    // действие с реле (включить/выключить)
   shTaskRepeat task_repeat; // периодичность выполнения задачи
+};
+
+// описание типов модулей
+enum srModuleType : uint8_t
+{
+  mtRelay,
+  mtSwitch,
+  mtTasks,
+  mtNtp
 };
 
 // описание свойств реле
@@ -256,6 +265,13 @@ public:
   void setRelayState(String _name, bool state);
 
   /**
+   * @brief установить состояние всех локальных реле
+   *
+   * @param state новое состояние реле; true - включено, иначе выключено;
+   */
+  void setStateForAll(bool state);
+
+  /**
    * @brief получение информации о текущем состоянии реле (включено/отключено)
    *
    * @param index  индекс реле в массиве
@@ -350,31 +366,39 @@ public:
    * @brief установка нового имени файла для сохранения настроек
    *
    * @param _name новое имя файла
+   * @param _mdl тип модуля, для которого нужно получить имя файла конфигурации
+   *
    */
-  void setFileName(const String &_name);
+  void setFileName(const String &_name, srModuleType _mdl = mtRelay);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
    *
+   * @param _mdl тип модуля, для которого нужно получить имя файла конфигурации
+   *
    * @return String
    */
-  String getFileName();
+  String getFileName(srModuleType _mdl = mtRelay);
 
   /**
    * @brief сохранение настроек в файл
    *
-   * @return true
-   * @return false
-   */
-  bool saveConfige();
-
-  /**
-   * @brief считывание и загрузка сохраненных в файле настроек
+   * @param _mdl тип модуля, для которого нужно сохранить настройки
    *
    * @return true
    * @return false
    */
-  bool loadConfig();
+  bool saveConfige(srModuleType _mdl = mtRelay);
+
+  /**
+   * @brief считывание и загрузка сохраненных в файле настроек
+   *
+   * @param _mdl тип модуля, для которого нужно загрузить настройки
+   *
+   * @return true
+   * @return false
+   */
+  bool loadConfig(srModuleType _mdl = mtRelay);
 
   /**
    * @brief установить время модуля (без смещения по часовому поясу)
@@ -447,6 +471,16 @@ public:
    * @return String
    */
   String getNtpServer3();
+
+  /**
+   * @brief добавление задачи в планировщик
+   *
+   * @param _task структура, описывающая задачу
+   *
+   * @return true
+   * @return false
+   */
+  bool addTaskToList(shSchedulerData &_task);
 };
 
 // ==== shSwitchControl class ==========================
@@ -541,7 +575,7 @@ public:
   void setBtnBeepData(uint16_t _freq, uint32_t _dur);
 
   /**
-   * @brief установка интервала проверки доступности связанных реле в сети в милисекундах; по умолчанию установлен интервал в 30 секунд
+   * @brief установка интервала проверки доступности связанных реле в сети в милисекундах; по умолчанию установлен интервал в 60 секунд
    *
    * @param _timer новое значение в милисекундах
    */
@@ -682,31 +716,38 @@ public:
    * @brief установка нового имени файла для сохранения настроек
    *
    * @param _name новое имя файла
+   * @param _mdl тип модуля, для которого нужно установить имя файла конфигурации
    */
-  void setFileName(const String &_name);
+  void setFileName(const String &_name, srModuleType _mdl = mtSwitch);
 
   /**
    * @brief получение текущего имени файла конфигурации модуля
    *
+   * @param _mdl тип модуля, для которого нужно получить имя файла конфигурации
+   *
    * @return String
    */
-  String getFileName();
+  String getFileName(srModuleType _mdl = mtSwitch);
 
   /**
    * @brief сохранение настроек в файл
    *
-   * @return true
-   * @return false
-   */
-  bool saveConfige();
-
-  /**
-   * @brief считывание и загрузка сохраненных в файле настроек
+   * @param _mdl тип модуля, для которого нужно сохранить настройки
    *
    * @return true
    * @return false
    */
-  bool loadConfig();
+  bool saveConfige(srModuleType _mdl = mtSwitch);
+
+  /**
+   * @brief считывание и загрузка сохраненных в файле настроек
+   *
+   * @param _mdl тип модуля, для которого нужно загрузить настройки
+   *
+   * @return true
+   * @return false
+   */
+  bool loadConfig(srModuleType _mdl = mtSwitch);
 
   /**
    * @brief установить время модуля (без смещения по часовому поясу)
@@ -779,6 +820,16 @@ public:
    * @return String
    */
   String getNtpServer3();
+
+  /**
+   * @brief добавление задачи в планировщик
+   *
+   * @param _task структура, описывающая задачу
+   *
+   * @return true
+   * @return false
+   */
+  bool addTaskToList(shSchedulerData &_task);
 };
 
 // ==== shBuzzer class ===============================
