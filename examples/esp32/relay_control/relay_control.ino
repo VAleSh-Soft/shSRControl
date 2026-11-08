@@ -1,22 +1,27 @@
 /**
  * @file relay_control.ino
  * @author Vladimir Shatalov (valesh-soft@yandex.ru)
- * @brief WiFi relay module built on esp32
- * @version 1.4
- * @date 30.09.2026
  *
- * @copyright Copyright (c) 2023
+ * @brief Пример создания модуля WiFi-реле (розетка, люстра и т.д.) на esp32;
+ *
+ *        Дополнительно показано добавление задачи в планировщик задач и
+ *        подключение Web-интерфейса планировщика
+ *
+ * @version 1.5
+ * @date 08.11.2026
+ *
+ * @copyright Copyright (c) 2023-2026
  *
  */
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <shSRControl.h>
 
-// модуль WiFi-реле (розетка, люстра и т.д.)
-
 #define FILESYSTEM SPIFFS
 // Вам нужно отформатировать файловую систему только один раз
-#define FORMAT_FILESYSTEM false
+// после первого запуска нужно изменить эту настройку на false 
+// и перепрошить модуль еще раз
+#define FORMAT_FILESYSTEM true
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
@@ -38,6 +43,9 @@ const int8_t ledPin = 4;
 srButton btn1(17);
 
 shRelayControl relay_control;
+
+String config_page = "/config_page"; // адрес страницы конфигурации модуля
+String tasks_page = "/tasks_page";   // адрес страницы планировщика задач
 
 void setup()
 {
@@ -64,9 +72,10 @@ void setup()
   // подключаем Web-интерфейс
   if (FILESYSTEM.begin())
   {
-    relay_control.attachWebInterface(&HTTP, &FILESYSTEM);
+    relay_control.attachWebInterface(&HTTP, &FILESYSTEM, config_page, tasks_page);
   }
 
+  // устанавливаем WiFi-подключение
   pinMode(ledPin, OUTPUT);
   Serial.print(F("Connecting to "));
   Serial.println(ssid);
@@ -87,12 +96,14 @@ void setup()
   Serial.print("Subnet mask: ");
   Serial.println(WiFi.subnetMask());
 
+  // запускаем модуль для работы с UDP-пакетами 
+  // если вы не собираетесь использовать WiFi-выключатели и планируете
+  // управлять модулем только через Web-интерфейс, то можете пропустить
+  // этот шаг
   Serial.print(F("Starting UDP..."));
-  if (udp.begin(relay_control.getUdpPort()))
+  if (relay_control.startDevice(&udp))
   {
-    Serial.println(F("OK"));
-    // запустить контроль модуля реле
-    relay_control.startDevice(&udp);
+    Serial.println(F("Device started"));
   }
   else
   {
@@ -100,6 +111,7 @@ void setup()
     ESP.restart();
   }
 
+  // запускаем HTTP-сервер
   HTTP.onNotFound([]()
                   { HTTP.send(404, "text/plan", F("404. File not found.")); });
   HTTP.begin();

@@ -60,12 +60,12 @@ void srButton::setBtnUpDown(bool flag, unsigned long thisMls)
 
 // ---- srButton public ------------------------
 
-srButton::srButton(uint8_t pin)
+srButton::srButton(uint8_t pin, uint16_t deb)
 {
   _PIN = pin;
+  _debounce_timeout = deb;
   setFlag(INPUTTYPE_BIT, PULL_UP);
   pinMode(_PIN, INPUT_PULLUP);
-  // (BTN_INPUT_TYPE == PULL_UP) ? pinMode(_PIN, INPUT_PULLUP) : pinMode(_PIN, INPUT);
   setFlag(BTNTYPE_BIT, BTN_NO);
 }
 
@@ -177,14 +177,14 @@ uint8_t srButton::getLastState() { return (_btn_state); }
 
 bool srButton::isButtonClosed() { return (getFlag(FLAG_BIT)); }
 
-bool srButton::isSecondButtonPressed(srButton &_but, uint8_t btn_state)
+bool srButton::isSecondButtonPressed(srButton *_but, uint8_t btn_state)
 {
   bool result = false;
-  if (getLastState() == btn_state && _but.isButtonClosed())
+  if (getLastState() == btn_state && _but->isButtonClosed())
   {
     result = true;
     resetButtonState();
-    _but.resetButtonState();
+    _but->resetButtonState();
   }
   return (result);
 }

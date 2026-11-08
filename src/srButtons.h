@@ -91,7 +91,7 @@ private:
   void setBtnUpDown(bool flag, unsigned long thisMls);
 
 public:
-  srButton(uint8_t pin);
+  srButton(uint8_t pin, uint16_t deb = 50u);
 
   // получение текущего состояния кнопки
   uint8_t getButtonState();
@@ -103,7 +103,7 @@ public:
   bool isButtonClosed();
 
   // определение одновременного нажатия двух кнопок; возвращает true, если в момент возникновения события btn_state текущей кнопки кнопка _but уже нажата; если метод вернул true, состояние обеих кнопок сбрасывается;
-  bool isSecondButtonPressed(srButton &_but, uint8_t btn_state = BTN_DOWN);
+  bool isSecondButtonPressed(srButton *_but, uint8_t btn_state = BTN_DOWN);
 
   // принудительный сброс состояния кнопки; может понадобиться, если по каким-то причинам нужно, например, исключить возникновение событий BTN_ONECLICK и BTN_DBLCLICK;
   void resetButtonState();
@@ -111,7 +111,7 @@ public:
   // установка режима обработки удержания кнопки нажатой; возможные варианты - LCM_CONTINUED, LCM_ONLYONCE или LCM_CLICKSERIES
   void setLongClickMode(uint8_t longclickmode);
 
-  // установка интервала удержания кнопки (значение по умолчанию 500 мс);
+  // установка интервала удержания кнопки (значение по умолчанию 1000 мс);
   void setTimeoutOfLongClick(uint16_t new_timeout);
 };
 

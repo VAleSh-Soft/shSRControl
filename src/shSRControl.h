@@ -43,10 +43,26 @@ enum shTaskRepeat : uint8_t
 struct shSchedulerData
 {
   bool task_status;         // статус задачи
-  uint32_t time_for_task;   // время срабатывания задачи, минут с начала суток
+  int32_t time_for_task;    // время срабатывания задачи, минут с начала суток
   uint8_t relay_index;      // индекс реле задачи
   bool action_for_relay;    // действие с реле (включить/выключить)
   shTaskRepeat task_repeat; // периодичность выполнения задачи
+
+  shSchedulerData() : task_status(true),
+                      time_for_task(0),
+                      relay_index(0),
+                      action_for_relay(true),
+                      task_repeat(TR_ONCE) {}
+
+  shSchedulerData(bool task_status,
+                  int32_t time_for_task,
+                  uint8_t relay_index,
+                  bool action_for_relay,
+                  shTaskRepeat task_repeat) : task_status(task_status),
+                                              time_for_task(time_for_task),
+                                              relay_index(relay_index),
+                                              action_for_relay(action_for_relay),
+                                              task_repeat(task_repeat) {}
 };
 
 // описание типов модулей
@@ -68,12 +84,14 @@ struct shRelayData
   srButton *relayButton;     // локальная кнопка, управляющая реле (располагается
                              // на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
+
   shRelayData() : relayName(""),
                   relayPin(255),
                   relayControlLevel(HIGH),
                   relayButton(nullptr),
                   relayDescription(""),
                   relayLastState(false) {}
+
   shRelayData(String relay_name,
               uint8_t relay_pin,
               uint8_t control_level,
@@ -202,16 +220,20 @@ public:
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
+   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей 
+   * 
+   * @return true если сервер UDP запущен успешно, иначе false
    */
-  void startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+  bool startDevice(WiFiUDP *_udp, uint16_t _udp_port);
 
   /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
+   * 
+   * @return true если сервер UDP запущен успешно, иначе false
    */
-  void startDevice(WiFiUDP *_udp);
+  bool startDevice(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса
@@ -481,6 +503,111 @@ public:
    * @return false
    */
   bool addTaskToList(shSchedulerData &_task);
+
+  /**
+   * @brief поиск задачи с заданными параметрами
+   * 
+   * @param _task структура, описывающая искомую задачу
+   * @return uint8_t 
+   */
+  uint8_t findTask(shSchedulerData &_task);
+
+  /**
+   * @brief поиск задачи с заданными параметрами
+   *
+   * @param _time_for_task время срабатывания задачи, минут с начала суток
+   * @param _relay_index индекс реле задачи
+   * @param _action_for_relay действие с реле (включить/выключить)
+   * @param _task_repeat периодичность выполнения задачи
+   *
+   * @return int8_t индекс найденной задачи в массиве или -1 в случае, если задача не найдена
+   *
+   */
+  int8_t findTask(int32_t _time_for_task,
+                  uint8_t _relay_index,
+                  bool _action_for_relay,
+                  shTaskRepeat _task_repeat);
+
+  /**
+   * @brief удаление задачи из списка планировщика
+   *
+   * @param _idx индекс задачи в списке планировщика
+   * @return true
+   * @return false
+   */
+  bool delTaskInList(uint8_t _idx);
+
+  /**
+   * @brief получить количество задач в планировщике
+   *
+   * @param is_active считать только активные задачи
+   * @return uint8_t
+   */
+  uint8_t getTaskCount(bool is_active = false);
+
+  /**
+   * @brief установить статус задачи - активна / выключена
+   * 
+   * @param _idx индекс задачи в списке планировщика
+   * @param _state новый статус задачи
+   */
+  void setTaskStatus(uint8_t _idx, bool _state);
+
+  /**
+   * @brief изменить данные существующей задачи
+   * 
+   * @param _idx индекс задачи в списке планировщика
+   * @param _task новые данные задачи
+   * @return true 
+   * @return false 
+   */
+  bool setTaskData(uint8_t _idx, shSchedulerData &_task);
+
+  /**
+   * @brief получение текущего состояния кнопки
+   *
+   * @param _idx индекс в массиве реле, к которому привязана кнопка
+   * @return uint8_t
+   */
+  uint8_t getButtonState(uint8_t _idx);
+
+  /**
+   * @brief возвращает true, если по результатам последнего вызова метода getButtonState() кнопка нажата
+   *
+   * @return true
+   * @return false
+   */
+  bool isButtonClosed(uint8_t _idx);
+
+  /**
+   * @brief определение одновременного нажатия двух кнопок; возвращает true, если в момент возникновения события btn_state кнопки с индексом _idx кнопка _but уже нажата; если метод вернул true, состояние обеих кнопок сбрасывается
+   *
+   * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
+   * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
+   * @return true
+   * @return false
+   */
+  bool isSecondButtonPressed(uint8_t _idx, uint8_t _but_2, uint8_t btn_state = BTN_DOWN);
+
+  /**
+   * @brief принудительный сброс состояния кнопки; может понадобиться, если по каким-то причинам нужно, например, исключить возникновение событий BTN_ONECLICK и BTN_DBLCLICK
+   *
+   */
+  void resetButtonState(uint8_t _idx);
+
+  /**
+   * @brief установка режима обработки удержания кнопки нажатой
+   *
+   * @param longclickmode новый режим обработки; возможные варианты - LCM_CONTINUED, LCM_ONLYONCE или LCM_CLICKSERIES
+   */
+  void setButtonLongClickMode(uint8_t _idx, uint8_t longclickmode);
+
+  /**
+   * @brief установка интервала удержания кнопки (значение по умолчанию 1000 мс)
+   *
+   * @param new_timeout новый интервал в милисекундах
+   */
+  void setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout);
 };
 
 // ==== shSwitchControl class ==========================
@@ -593,15 +720,19 @@ public:
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
-   */
-  void startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+     * 
+   * @return true если сервер UDP запущен успешно, иначе false
+ */
+  bool startDevice(WiFiUDP *_udp, uint16_t _udp_port);
 
   /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
+   * 
+   * @return true если сервер UDP запущен успешно, иначе false
    */
-  void startDevice(WiFiUDP *_udp);
+  bool startDevice(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса
@@ -830,6 +961,111 @@ public:
    * @return false
    */
   bool addTaskToList(shSchedulerData &_task);
+
+  /**
+   * @brief поиск задачи с заданными параметрами
+   * 
+   * @param _task структура, описывающая искомую задачу
+   * @return uint8_t 
+   */
+  uint8_t findTask(shSchedulerData &_task);
+
+  /**
+   * @brief поиск задачи с заданными параметрами
+   *
+   * @param _time_for_task время срабатывания задачи, минут с начала суток
+   * @param _relay_index индекс реле задачи
+   * @param _action_for_relay действие с реле (включить/выключить)
+   * @param _task_repeat периодичность выполнения задачи
+   *
+   * @return int8_t индекс найденной задачи в массиве или -1 в случае, если задача не найдена
+   *
+   */
+  int8_t findTask(int32_t _time_for_task,
+                  uint8_t _relay_index,
+                  bool _action_for_relay,
+                  shTaskRepeat _task_repeat);
+
+  /**
+   * @brief удаление задачи из списка планировщика
+   *
+   * @param _idx индекс задачи в списке планировщика
+   * @return true
+   * @return false
+   */
+  bool delTaskInList(uint8_t _idx);
+
+  /**
+   * @brief получить количество задач в планировщике
+   *
+   * @param is_active считать только активные задачи
+   * @return uint8_t
+   */
+  uint8_t getTaskCount(bool is_active = false);
+
+  /**
+   * @brief установить статус задачи - активна / выключена
+   * 
+   * @param _idx индекс задачи в списке планировщика
+   * @param _state новый статус задачи
+   */
+  void setTaskStatus(uint8_t _idx, bool _state);
+
+  /**
+   * @brief изменить данные существующей задачи
+   * 
+   * @param _idx индекс задачи в списке планировщика
+   * @param _task новые данные задачи
+   * @return true 
+   * @return false 
+   */
+  bool setTaskData(uint8_t _idx, shSchedulerData &_task);
+
+  /**
+   * @brief получение текущего состояния кнопки
+   *
+   * @param _idx индекс в массиве реле, к которому привязана кнопка
+   * @return uint8_t
+   */
+  uint8_t getButtonState(uint8_t _idx);
+
+  /**
+   * @brief возвращает true, если по результатам последнего вызова метода getButtonState() кнопка нажата
+   *
+   * @return true
+   * @return false
+   */
+  bool isButtonClosed(uint8_t _idx);
+
+  /**
+   * @brief определение одновременного нажатия двух кнопок; возвращает true, если в момент возникновения события btn_state кнопки с индексом _idx кнопка _but уже нажата; если метод вернул true, состояние обеих кнопок сбрасывается
+   *
+   * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
+   * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
+   * @return true
+   * @return false
+   */
+  bool isSecondButtonPressed(uint8_t _idx, uint8_t _but_2, uint8_t btn_state = BTN_DOWN);
+
+  /**
+   * @brief принудительный сброс состояния кнопки; может понадобиться, если по каким-то причинам нужно, например, исключить возникновение событий BTN_ONECLICK и BTN_DBLCLICK
+   *
+   */
+  void resetButtonState(uint8_t _idx);
+
+  /**
+   * @brief установка режима обработки удержания кнопки нажатой
+   *
+   * @param longclickmode новый режим обработки; возможные варианты - LCM_CONTINUED, LCM_ONLYONCE или LCM_CLICKSERIES
+   */
+  void setButtonLongClickMode(uint8_t _idx, uint8_t longclickmode);
+
+  /**
+   * @brief установка интервала удержания кнопки (значение по умолчанию 1000 мс)
+   *
+   * @param new_timeout новый интервал в милисекундах
+   */
+  void setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout);
 };
 
 // ==== shBuzzer class ===============================

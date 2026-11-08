@@ -179,6 +179,7 @@ static void find_remote_relays();
 
 static void set_udp_port(uint16_t _udp_port);
 static uint16_t get_udp_port();
+static bool start_device(WiFiUDP *_udp, uint16_t _udp_port);
 
 static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
 static void clearListOfRemoteRelays();
@@ -186,7 +187,12 @@ static void clearListOfRemoteRelays();
 // ===================================================
 static void checkTasksList(srModuleType _mdt);
 static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
+static int8_t find_task(shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
+static bool del_task_in_list(uint8_t _idx);
+static void set_task_status(uint8_t _idx, bool _state);
+static bool set_task_tada(uint8_t _idx, shSchedulerData &_task);
+static uint8_t get_task_count(bool is_active = false);
 static void getRelayNameList();
 static void set_local_time(time_t _now);
 static time_t get_local_time();
@@ -196,6 +202,17 @@ static void set_ntp_data(bool _ntp_enabled,
                          String _ntp_server1 = "",
                          String _ntp_server2 = "",
                          String _ntp_server3 = "");
+
+// ===================================================
+static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl);
+static bool is_button_closed(uint8_t _idx, srModuleType _mdl);
+static bool is_second_button_pressed(uint8_t _idx,
+                                     uint8_t _but_2,
+                                     srModuleType _mdl,
+                                     uint8_t btn_state = BTN_DOWN);
+static void reset_button_state(uint8_t _idx, srModuleType _mdl);
+static void set_long_click_mode(uint8_t _idx, uint8_t longclickmode, srModuleType _mdl);
+static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl);
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -350,15 +367,14 @@ void shRelayControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
   bzr.setBtnBeepData(_freq, _dur);
 }
 
-void shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
+bool shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
 {
-  udp = _udp;
-  udpPort = _udp_port;
+  return start_device(_udp, _udp_port);
 }
 
-void shRelayControl::startDevice(WiFiUDP *_udp)
+bool shRelayControl::startDevice(WiFiUDP *_udp)
 {
-  udp = _udp;
+  return start_device(_udp, udpPort);
 }
 
 void shRelayControl::attachWebInterface(shWebServer *_server,
@@ -764,6 +780,76 @@ bool shRelayControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
+uint8_t shRelayControl::findTask(shSchedulerData &_task)
+{
+  return find_task(_task);
+}
+
+int8_t shRelayControl::findTask(int32_t _time_for_task,
+                                uint8_t _relay_index,
+                                bool _action_for_relay,
+                                shTaskRepeat _task_repeat)
+{
+  shSchedulerData task(true,
+                       _time_for_task,
+                       _relay_index,
+                       _action_for_relay,
+                       _task_repeat);
+  return find_task(task);
+}
+
+bool shRelayControl::delTaskInList(uint8_t _idx)
+{
+  return del_task_in_list(_idx);
+}
+
+uint8_t shRelayControl::getTaskCount(bool is_active)
+{
+  return get_task_count(is_active);
+}
+
+void shRelayControl::setTaskStatus(uint8_t _idx, bool _state)
+{
+  set_task_status(_idx, _state);
+}
+
+bool shRelayControl::setTaskData(uint8_t _idx, shSchedulerData &_task)
+{
+  return set_task_tada(_idx, _task);
+}
+
+uint8_t shRelayControl::getButtonState(uint8_t _idx)
+{
+  return get_button_state(_idx, mtRelay);
+}
+
+bool shRelayControl::isButtonClosed(uint8_t _idx)
+{
+  return is_button_closed(_idx, mtRelay);
+}
+
+bool shRelayControl::isSecondButtonPressed(uint8_t _idx,
+                                           uint8_t _but_2,
+                                           uint8_t btn_state)
+{
+  return is_second_button_pressed(_idx, _but_2, mtRelay, btn_state);
+}
+
+void shRelayControl::resetButtonState(uint8_t _idx)
+{
+  reset_button_state(_idx, mtRelay);
+}
+
+void shRelayControl::setButtonLongClickMode(uint8_t _idx, uint8_t longclickmode)
+{
+  set_long_click_mode(_idx, longclickmode, mtRelay);
+}
+
+void shRelayControl::setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout)
+{
+  set_timeout_of_long_click(_idx, new_timeout, mtRelay);
+}
+
 // ==== shSwitchControl class ==========================
 
 shSwitchControl::shSwitchControl() { moduleFlag = mtSwitch; }
@@ -853,19 +939,14 @@ void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 
 uint32_t shSwitchControl::getCheckTimer() { return (checkInterval); }
 
-void shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
+bool shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
 {
-  udp = _udp;
-  udpPort = _udp_port;
-  // выполнить первичный поиск привязанных реле
-  find_remote_relays();
+  return start_device(_udp, _udp_port);
 }
 
-void shSwitchControl::startDevice(WiFiUDP *_udp)
+bool shSwitchControl::startDevice(WiFiUDP *_udp)
 {
-  udp = _udp;
-  // выполнить первичный поиск привязанных реле
-  find_remote_relays();
+  return start_device(_udp, udpPort);
 }
 
 void shSwitchControl::attachWebInterface(shWebServer *_server,
@@ -1220,6 +1301,76 @@ bool shSwitchControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
+uint8_t shSwitchControl::findTask(shSchedulerData &_task)
+{
+  return find_task(_task);
+}
+
+int8_t shSwitchControl::findTask(int32_t _time_for_task,
+                                 uint8_t _relay_index,
+                                 bool _action_for_relay,
+                                 shTaskRepeat _task_repeat)
+{
+  shSchedulerData task(true,
+                       _time_for_task,
+                       _relay_index,
+                       _action_for_relay,
+                       _task_repeat);
+  return find_task(task);
+}
+
+bool shSwitchControl::delTaskInList(uint8_t _idx)
+{
+  return del_task_in_list(_idx);
+}
+
+uint8_t shSwitchControl::getTaskCount(bool is_active)
+{
+  return get_task_count(is_active);
+}
+
+void shSwitchControl::setTaskStatus(uint8_t _idx, bool _state)
+{
+  set_task_status(_idx, _state);
+}
+
+bool shSwitchControl::setTaskData(uint8_t _idx, shSchedulerData &_task)
+{
+  return set_task_tada(_idx, _task);
+}
+
+uint8_t shSwitchControl::getButtonState(uint8_t _idx)
+{
+  return get_button_state(_idx, mtSwitch);
+}
+
+bool shSwitchControl::isButtonClosed(uint8_t _idx)
+{
+  return is_button_closed(_idx, mtSwitch);
+}
+
+bool shSwitchControl::isSecondButtonPressed(uint8_t _idx,
+                                            uint8_t _but_2,
+                                            uint8_t btn_state)
+{
+  return is_second_button_pressed(_idx, _but_2, mtSwitch, btn_state);
+}
+
+void shSwitchControl::resetButtonState(uint8_t _idx)
+{
+  reset_button_state(_idx, mtSwitch);
+}
+
+void shSwitchControl::setButtonLongClickMode(uint8_t _idx, uint8_t longclickmode)
+{
+  set_long_click_mode(_idx, longclickmode, mtSwitch);
+}
+
+void shSwitchControl::setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout)
+{
+  set_timeout_of_long_click(_idx, new_timeout, mtSwitch);
+}
+
 // ===================================================
 
 static IPAddress get_broadcast_address()
@@ -1476,6 +1627,25 @@ static uint16_t get_udp_port()
   return udpPort;
 }
 
+static bool start_device(WiFiUDP *_udp, uint16_t _udp_port)
+{
+  udp = _udp;
+  udpPort = _udp_port;
+  SR_PRINT(F("Starting UDP..."));
+  if (udp->begin(udpPort))
+  {
+    SR_PRINTLN(F("OK"));
+    if (moduleFlag == mtSwitch)
+    {
+      // для модуля выключателя выполнить первичный поиск удаленных реле
+      find_remote_relays();
+    }
+    return true;
+  }
+  SR_PRINTLN(F("unsuccessful"));
+  return false;
+}
+
 static int8_t addRelayToListOfRemoteRelays(const String &relay_name)
 {
   if (relay_name.length() > 0)
@@ -1580,6 +1750,23 @@ static bool check_day_of_week(uint8_t _day, shTaskRepeat _per)
   return ((uint8_t)_per & 1 << _day);
 }
 
+static int8_t find_task(shSchedulerData &_task)
+{
+  int8_t result = -1;
+  if (tasksArray != NULL && tasksCount > 0)
+  {
+    for (uint8_t i = 0; i < tasksCount; i++)
+    {
+      if (tasksArray[i] == _task)
+      {
+        result = i;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 static bool add_task_to_list(shSchedulerData &_task)
 {
   // если лимит количества задач достигнут, больше ничего не делать
@@ -1597,20 +1784,18 @@ static bool add_task_to_list(shSchedulerData &_task)
   }
 
   // проверить наличие такой задачи
-  for (uint8_t i = 0; i < tasksCount; i++)
+  int8_t idx = find_task(_task);
+  if (idx >= 0)
   {
-    if (tasksArray[i] == _task)
-    {
-      // если такая задача найдена, устанавливаем статус задачи в соответствие с
-      // _task.task_status и считаем, что задача добавлена успешно
-      tasksArray[i].task_status = _task.task_status;
-      SR_PRINTLN(F("The task already exists, and its status has been updated accordingly"));
-      return save_config_file(mtTasks);
-    }
+    // если такая задача найдена, устанавливаем статус задачи в соответствие с
+    // _task.task_status и считаем, что задача добавлена успешно
+    tasksArray[idx].task_status = _task.task_status;
+    SR_PRINTLN(F("The task already exists, and its status has been updated accordingly"));
+    return save_config_file(mtTasks);
   }
 
-  static DynamicJsonDocument doc(CONFIG_SIZE);
   // если задача не была найдена, то добавляем ее в список
+  static DynamicJsonDocument doc(CONFIG_SIZE);
   doc.clear();
   get_config_json_doc(doc, mtTasks);
   JsonObject task = doc[sr_t_list_str].as<JsonArray>().createNestedObject();
@@ -1624,6 +1809,83 @@ static bool add_task_to_list(shSchedulerData &_task)
   SR_PRINTLN(F("The task has been added successfully"));
 
   return save_config_file(mtTasks, doc);
+}
+
+static bool del_task_in_list(uint8_t _idx)
+{
+  if (_idx >= tasksCount)
+  {
+    SR_PRINTLN(F("Invalid index for task deletion"));
+    return false;
+  }
+
+  uint8_t x = tasksCount;
+
+  tasksArray[_idx].time_for_task = -1;
+  static DynamicJsonDocument doc(CONFIG_SIZE);
+  doc.clear();
+  get_config_json_doc(doc, mtTasks);
+  load_setting(mtTasks, doc);
+  save_config_file(mtTasks, doc);
+  if (x - tasksCount == 1)
+  {
+    SR_PRINTLN(F("The task has been successfully deleted"));
+    return true;
+  }
+  else
+  {
+    SR_PRINTLN(F("Unsuccessful task deletion"));
+    return false;
+  }
+}
+
+static void set_task_status(uint8_t _idx, bool _state)
+{
+  if (_idx < tasksCount)
+  {
+    tasksArray[_idx].task_status = _state;
+    save_config_file(mtTasks);
+  }
+}
+
+static bool set_task_tada(uint8_t _idx, shSchedulerData &_task)
+{
+  if (_idx < tasksCount)
+  {
+    if (find_task(_task) >= 0)
+    {
+      SR_PRINTLN(F("A task with these parameters already exists; the change has not been implemented"));
+      return false;
+    }
+    
+    tasksArray[_idx] = _task;
+    return save_config_file(mtTasks);
+  }
+  return false;
+}
+
+static uint8_t get_task_count(bool is_active)
+{
+  if (tasksArray == NULL)
+  {
+    return 0;
+  }
+
+  uint8_t result = 0;
+  for (uint8_t i = 0; i < tasksCount; i++)
+  {
+    // задачи с отрицательным временем считаются удаленными
+    if (tasksArray[i].time_for_task >= 0)
+    {
+      // если задано искать только активные задачи, неактивные пропускаем
+      if (is_active && !tasksArray[i].task_status)
+      {
+        continue;
+      }
+      result++;
+    }
+  }
+  return result;
 }
 
 static void getRelayNameList()
@@ -1691,6 +1953,140 @@ static void set_ntp_data(bool _ntp_enabled,
   }
 
   save_config_file(mtNtp);
+}
+
+// ===================================================
+static bool is_valid_button(uint8_t _idx, srModuleType _mdl)
+{
+  uint8_t x = (_mdl == mtRelay) ? relayCount : switchCount;
+  bool result = _idx < x;
+  if (result)
+  {
+    switch (_mdl)
+    {
+    case mtRelay:
+      result = relayArray[_idx].relayButton != nullptr;
+      break;
+    case mtSwitch:
+      result = switchArray[_idx].relayButton != nullptr;
+      break;
+    default:
+      result = false;
+      break;
+    }
+  }
+  return result;
+}
+
+static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return BTN_RELEASED;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    return (relayArray[_idx].relayButton->getLastState());
+  case mtSwitch:
+    return (switchArray[_idx].relayButton->getLastState());
+  default:
+    return BTN_RELEASED;
+  }
+}
+
+static bool is_button_closed(uint8_t _idx, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return false;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    return (relayArray[_idx].relayButton->isButtonClosed());
+  case mtSwitch:
+    return (switchArray[_idx].relayButton->isButtonClosed());
+  default:
+    return false;
+  }
+}
+
+static bool is_second_button_pressed(uint8_t _idx,
+                                     uint8_t _but_2,
+                                     srModuleType _mdl,
+                                     uint8_t btn_state)
+{
+  if (!is_valid_button(_idx, _mdl) || !is_valid_button(_but_2, _mdl))
+  {
+    return false;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    return (relayArray[_idx].relayButton->isSecondButtonPressed(relayArray[_but_2].relayButton,
+                                                                btn_state));
+  case mtSwitch:
+    return (switchArray[_idx].relayButton->isSecondButtonPressed(relayArray[_but_2].relayButton,
+                                                                 btn_state));
+  default:
+    return false;
+  }
+}
+
+static void reset_button_state(uint8_t _idx, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    relayArray[_idx].relayButton->resetButtonState();
+    break;
+  case mtSwitch:
+    switchArray[_idx].relayButton->resetButtonState();
+    break;
+  default:
+    break;
+  }
+}
+
+static void set_long_click_mode(uint8_t _idx, uint8_t longclickmode, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    relayArray[_idx].relayButton->setLongClickMode(longclickmode);
+    break;
+  case mtSwitch:
+    switchArray[_idx].relayButton->setLongClickMode(longclickmode);
+    break;
+  default:
+    break;
+  }
+}
+
+static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    relayArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
+    break;
+  case mtSwitch:
+    switchArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
+    break;
+  }
 }
 
 // ==== реакции сервера ==============================
@@ -1805,12 +2201,15 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
     {
       for (uint8_t i = 0; i < tasksCount; i++)
       {
-        JsonObject task = tasks.createNestedObject();
-        task[sr_state_str] = (uint8_t)tasksArray[i].task_status;
-        task[sr_time_str] = tasksArray[i].time_for_task;
-        task[sr_rel_str] = tasksArray[i].relay_index;
-        task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
-        task[sr_rep_str] = (uint8_t)tasksArray[i].task_repeat;
+        if (tasksArray[i].time_for_task >= 0)
+        {
+          JsonObject task = tasks.createNestedObject();
+          task[sr_state_str] = (uint8_t)tasksArray[i].task_status;
+          task[sr_time_str] = tasksArray[i].time_for_task;
+          task[sr_rel_str] = tasksArray[i].relay_index;
+          task[sr_act_str] = (uint8_t)tasksArray[i].action_for_relay;
+          task[sr_rep_str] = (uint8_t)tasksArray[i].task_repeat;
+        }
       }
     }
   }

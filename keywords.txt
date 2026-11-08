@@ -61,6 +61,17 @@ getNtpServer1	KEYWORD2
 getNtpServer2	KEYWORD2
 getNtpServer3	KEYWORD2
 addTaskToList	KEYWORD2
+findTask	KEYWORD2
+getTaskCount	KEYWORD2
+delTaskInList	KEYWORD2
+setTaskStatus	KEYWORD2
+setTaskData	KEYWORD2
+getButtonState	KEYWORD2
+isButtonClosed	KEYWORD2
+isSecondButtonPressed	KEYWORD2
+resetButtonState	KEYWORD2
+setButtonLongClickMode	KEYWORD2
+setButtonTimeoutOfLongClick	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
