@@ -22,16 +22,17 @@
 #include <WiFiUdp.h>
 #include <shSRControl.h>
 
-// модуль WiFi-выключателя
+#define BUTTON_1_PIN 16 // пин для подключения первой кнопки
+#define BUTTON_2_PIN 18 // пин для подключения второй кнопки
 
-#define FILESYSTEM SPIFFS
+#define FILESYSTEM FFat
 // Вам нужно отформатировать файловую систему только один раз
 #define FORMAT_FILESYSTEM false
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
 
-const uint16_t localPort = 54321; // локальный порт для прослушивания udp-пакетов
+const uint16_t localPort = 54321;  // локальный порт для прослушивания udp-пакетов
 const uint32_t checkTimer = 60000; // интервал проверки доступности реле - 60 сек
 
 WebServer HTTP(80);
@@ -39,17 +40,12 @@ WiFiUDP udp;
 
 #if FILESYSTEM == FFat
 #include <FFat.h>
-#endif
-#if FILESYSTEM == SPIFFS
+#elif FILESYSTEM == SPIFFS
 #include <SPIFFS.h>
 #endif
 
 const int8_t ledPin = 4;
 const int8_t buzzerPin = 17;
-
-// работаем с двумя кнопками на модуле выключателя
-srButton btn1(16);
-srButton btn2(18);
 
 shSwitchControl switch_control;
 
@@ -70,9 +66,9 @@ void setup()
   switch_control.setUdpPort(localPort);
   switch_control.setCheckTimer(checkTimer);
 
-  // заполняем данные удаленных реле
-  switch_control.addRelay("relay1", &btn1);
-  switch_control.addRelay("relay2", &btn2);
+  // заполняем данные удаленных реле, две локальные кнопки
+  switch_control.addRelay("relay1", BUTTON_1_PIN);
+  switch_control.addRelay("relay2", BUTTON_2_PIN);
 
   // настраиваем первую кнопку, чтобы при ее удержании более двух секунд можно
   // было отключить все ассоциированные с модулем удаленные реле
@@ -113,7 +109,7 @@ void setup()
   Serial.println(WiFi.subnetMask());
 
   // запускаем модуль для работы с UDP-пакетами
-  if (switch_control.startDevice(&udp))
+  if (switch_control.startUdpInteraction(&udp))
   {
     Serial.println(F("Device started"));
   }
@@ -122,7 +118,7 @@ void setup()
     Serial.println(F("failed, restart"));
     ESP.restart();
   }
- 
+
   // добавить в планировщик задачу, которая будет включать реле с индексом 1
   // по понедельникам, средам и пятницам в 21:30
   shSchedulerData task(true, // задача активна

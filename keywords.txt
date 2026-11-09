@@ -27,7 +27,7 @@ init	KEYWORD2
 setUdpPort	KEYWORD2
 getUdpPort	KEYWORD2
 addRelay	KEYWORD2
-startDevice	KEYWORD2
+startUdpInteraction	KEYWORD2
 attachWebInterface	KEYWORD2
 tick	KEYWORD2
 switchRelay	KEYWORD2

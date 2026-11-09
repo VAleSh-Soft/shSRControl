@@ -92,6 +92,7 @@ private:
 
 public:
   srButton(uint8_t pin, uint16_t deb = 50u);
+  srButton();
 
   // получение текущего состояния кнопки
   uint8_t getButtonState();

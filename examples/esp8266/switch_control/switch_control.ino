@@ -24,9 +24,10 @@
 #include <FS.h>
 #include <shSRControl.h>
 
-// модуль WiFi-выключателя
+#define BUTTON_1_PIN D1
+#define BUTTON_2_PIN D2
 
-#define FILESYSTEM SPIFFS
+#define FILESYSTEM LittleFS
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
@@ -43,10 +44,6 @@ WiFiUDP udp;
 
 const int8_t ledPin = LED_BUILTIN;
 const int8_t buzzerPin = 15;
-
-// работаем с двумя кнопками на модуле выключателя
-srButton btn1(D1);
-srButton btn2(D2);
 
 shSwitchControl switch_control;
 
@@ -67,9 +64,9 @@ void setup()
   switch_control.setUdpPort(localPort);
   switch_control.setCheckTimer(checkTimer);
 
-  // заполняем данные удаленных реле
-  switch_control.addRelay("relay1", &btn1);
-  switch_control.addRelay("relay2", &btn2);
+  // заполняем данные удаленных реле, две локальные кнопки
+  switch_control.addRelay("relay1", BUTTON_1_PIN);
+  switch_control.addRelay("relay2", BUTTON_2_PIN);
 
   // настраиваем первую кнопку, чтобы при ее удержании более двух секунд можно
   // было отключить все ассоциированные с модулем удаленные реле
@@ -105,7 +102,7 @@ void setup()
   Serial.println(WiFi.subnetMask());
 
   // запускаем модуль для работы с UDP-пакетами
-  if (switch_control.startDevice(&udp))
+  if (switch_control.startUdpInteraction(&udp))
   {
     Serial.println(F("Device started"));
   }

@@ -29,6 +29,7 @@ static const String sr_relays_str = "relays";
 static const String sr_module_description_str = "module_descr";
 static const String sr_module_name_str = "module_name";
 static const String sr_udp_port_str = "udp_port";
+static const String sr_udp_en_str = "udp_en";
 static const String sr_check_interval_str = "check_int";
 static const String sr_last_state_str = "last";
 static const String sr_ip_addr_str = "addr";
@@ -113,22 +114,22 @@ static const uint16_t RELAY_DATA_SIZE = 256;
 srModuleType moduleFlag = mtRelay;
 
 static shRelayData *relayArray = NULL;
-static int8_t relayCount = 0;
-static String relayFileConfigName = "/relay.json";
-
 static shSwitchData *switchArray = NULL;
-static int8_t switchCount = 0;
-static String switchFileConfigName = "/switch.json";
-static uint32_t checkInterval = DEFAULT_CHECK_INTERVAL;
-static String listOfRemoteRelays[SIZE_LIST_OF_REMOTE_RELAYS];
+static srButton *buttonArray = NULL;
+static String *relayNameList = NULL;
+static int8_t relayCount = 0;
 
 static shSchedulerData *tasksArray = NULL;
 static uint8_t tasksCount = 0;
-static String *relayNameList = NULL;
-static uint8_t relayNameCount = 0;
-static String tasksFileConfigName = "/tasks.json";
 
+static String relayFileConfigName = "/relay.json";
+static String switchFileConfigName = "/switch.json";
+static String tasksFileConfigName = "/tasks.json";
 static String ntpFileConfigName = "/ntp.json";
+
+static uint32_t checkInterval = DEFAULT_CHECK_INTERVAL;
+static String listOfRemoteRelays[SIZE_LIST_OF_REMOTE_RELAYS];
+
 static bool ntp_enabled = true;
 static String ntp_server1 = "ru.pool.ntp.org";
 static String ntp_server2 = "pool.ntp.org";
@@ -185,6 +186,11 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
 static void clearListOfRemoteRelays();
 
 // ===================================================
+
+static void arrays_init(uint8_t _count);
+
+// ===================================================
+
 static void checkTasksList(srModuleType _mdt);
 static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
 static int8_t find_task(shSchedulerData &_task);
@@ -293,16 +299,7 @@ void shRelayControl::init(uint8_t _relay_count)
     relayCount = _relay_count;
   }
 
-  if (relayNameList)
-  {
-    delete[] relayNameList;
-  }
-
-  relayNameList = new (std::nothrow) String[relayCount];
-  if (relayNameList)
-  {
-    relayNameCount = relayCount;
-  }
+  arrays_init(relayCount);
 
   if (Serial != NULL)
   {
@@ -313,11 +310,11 @@ void shRelayControl::init(uint8_t _relay_count)
 bool shRelayControl::addRelay(const String &relay_name,
                               uint8_t relay_pin,
                               uint8_t control_level,
-                              srButton *relay_button,
+                              int8_t relay_button_pin,
                               const String &relay_description)
 {
   bool result = false;
-  if (relayCount > 0)
+  if (relayCount > 0 && relayArray != NULL)
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
@@ -326,11 +323,14 @@ bool shRelayControl::addRelay(const String &relay_name,
         relayArray[i] = shRelayData(relay_name,
                                     relay_pin,
                                     control_level,
-                                    relay_button,
+                                    relay_button_pin,
                                     relay_description);
+        if (relay_button_pin >= 0 && buttonArray != NULL)
+        {
+          buttonArray[i] = srButton(relay_button_pin);
+        }
         pinMode(relay_pin, OUTPUT);
         digitalWrite(relay_pin, !control_level);
-        SR_PRINTLN(digitalRead(relayArray[i].relayPin));
         result = true;
         break;
       }
@@ -367,12 +367,12 @@ void shRelayControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
   bzr.setBtnBeepData(_freq, _dur);
 }
 
-bool shRelayControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
+bool shRelayControl::startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port)
 {
   return start_device(_udp, _udp_port);
 }
 
-bool shRelayControl::startDevice(WiFiUDP *_udp)
+bool shRelayControl::startUdpInteraction(WiFiUDP *_udp)
 {
   return start_device(_udp, udpPort);
 }
@@ -439,13 +439,16 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
 void shRelayControl::tick()
 {
   // опрос кнопок
-  for (uint8_t i = 0; i < relayCount; i++)
+  if (buttonArray != NULL)
   {
-    if (relayArray[i].relayButton != NULL &&
-        relayArray[i].relayButton->getButtonState() == BTN_DOWN)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
-      bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
-      switch_local_relay(i);
+      if (relayArray[i].relayButtonPin >= 0 &&
+          buttonArray[i].getButtonState() == BTN_DOWN)
+      {
+        bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
+        switch_local_relay(i);
+      }
     }
   }
 
@@ -865,19 +868,10 @@ void shSwitchControl::init(uint8_t _switch_count)
   switchArray = new (std::nothrow) shSwitchData[_switch_count];
   if (switchArray)
   {
-    switchCount = _switch_count;
+    relayCount = _switch_count;
   }
 
-  if (relayNameList)
-  {
-    delete[] relayNameList;
-  }
-
-  relayNameList = new (std::nothrow) String[switchCount];
-  if (relayNameList)
-  {
-    relayNameCount = switchCount;
-  }
+  arrays_init(relayCount);
 
   if (Serial != NULL)
   {
@@ -886,17 +880,22 @@ void shSwitchControl::init(uint8_t _switch_count)
 }
 
 bool shSwitchControl::addRelay(const String &relay_name,
-                               srButton *relay_button)
+                               int8_t relay_button_pin)
 {
   bool result = false;
-  if (switchCount > 0)
+  if (relayCount > 0 && switchArray != NULL)
   {
-    for (uint8_t i = 0; i < switchCount; i++)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
       if (switchArray[i].relayName == "")
       {
         switchArray[i] = shSwitchData(relay_name,
-                                      relay_button);
+                                      relay_button_pin);
+        if (relay_button_pin >= 0 && buttonArray != NULL)
+        {
+          buttonArray[i] = srButton(relay_button_pin);
+        }
+
         result = true;
         break;
       }
@@ -939,12 +938,12 @@ void shSwitchControl::setCheckTimer(uint32_t _timer) { checkInterval = _timer; }
 
 uint32_t shSwitchControl::getCheckTimer() { return (checkInterval); }
 
-bool shSwitchControl::startDevice(WiFiUDP *_udp, uint16_t _udp_port)
+bool shSwitchControl::startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port)
 {
   return start_device(_udp, _udp_port);
 }
 
-bool shSwitchControl::startDevice(WiFiUDP *_udp)
+bool shSwitchControl::startUdpInteraction(WiFiUDP *_udp)
 {
   return start_device(_udp, udpPort);
 }
@@ -1001,13 +1000,16 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
 void shSwitchControl::tick()
 {
   // опрос кнопок
-  for (uint8_t i = 0; i < switchCount; i++)
+  if (buttonArray != NULL)
   {
-    if (switchArray[i].relayButton != NULL &&
-        switchArray[i].relayButton->getButtonState() == BTN_DOWN)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
-      bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
-      switch_remote_relay(i);
+      if (switchArray[i].relayButtonPin >= 0 &&
+          buttonArray[i].getButtonState() == BTN_DOWN)
+      {
+        bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
+        switch_remote_relay(i);
+      }
     }
   }
 
@@ -1135,7 +1137,7 @@ int8_t shSwitchControl::getRelayIndexByName(String _name)
   int8_t result = -1;
   if (_name.length() > 0)
   {
-    for (int8_t i = 0; i < switchCount; i++)
+    for (int8_t i = 0; i < relayCount; i++)
     {
       if (switchArray[i].relayName == _name)
       {
@@ -1172,7 +1174,7 @@ void shSwitchControl::setStateForAll(bool state, bool _self)
 {
   if (_self)
   {
-    for (uint8_t i = 0; i < switchCount; i++)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
       set_remote_relay_state(i, state);
     }
@@ -1210,7 +1212,7 @@ String shSwitchControl::getModuleName()
 
 void shSwitchControl::setRelayName(int8_t index, String _name)
 {
-  if ((index >= 0) && (index < switchCount))
+  if ((index >= 0) && (index < relayCount))
   {
     switchArray[index].relayName = _name;
   }
@@ -1218,7 +1220,7 @@ void shSwitchControl::setRelayName(int8_t index, String _name)
 String shSwitchControl::getRelayName(int8_t index)
 {
   String result = "";
-  if ((index >= 0) && (index < switchCount))
+  if ((index >= 0) && (index < relayCount))
   {
     result = switchArray[index].relayName;
   }
@@ -1567,7 +1569,7 @@ static void send_command_for_relay(int8_t index, const String &command)
   if (WiFi.isConnected())
   {
     if ((index >= 0) &&
-        (index < switchCount) &&
+        (index < relayCount) &&
         (switchArray[index].relayName != emptyString))
     {
       if (switchArray[index].relayFound)
@@ -1603,7 +1605,7 @@ static void send_command_for_relay(int8_t index, const String &command)
 
 static void find_remote_relays()
 {
-  for (uint8_t i = 0; i < switchCount; i++)
+  for (uint8_t i = 0; i < relayCount; i++)
   {
     switchArray[i].relayFound = false;
   }
@@ -1635,6 +1637,8 @@ static bool start_device(WiFiUDP *_udp, uint16_t _udp_port)
   if (udp->begin(udpPort))
   {
     SR_PRINTLN(F("OK"));
+    SR_PRINT(F("udp port: "));
+    SR_PRINTLN(udpPort);
     if (moduleFlag == mtSwitch)
     {
       // для модуля выключателя выполнить первичный поиск удаленных реле
@@ -1679,6 +1683,25 @@ static void clearListOfRemoteRelays()
   }
 }
 
+// ===================================================
+
+static void arrays_init(uint8_t _count)
+{
+  if (relayNameList)
+  {
+    delete[] relayNameList;
+  }
+
+  relayNameList = new (std::nothrow) String[relayCount];
+
+  if (buttonArray)
+  {
+    delete[] buttonArray;
+  }
+
+  buttonArray = new (std::nothrow) srButton[relayCount];
+}
+
 // ==== обработка списка заданий планировщика ========
 static void checkTasksList(srModuleType _mdt)
 {
@@ -1719,10 +1742,13 @@ static void checkTasksList(srModuleType _mdt)
             SR_PRINT(tasksArray[i].time_for_task / 60);
             SR_PRINT(F(":"));
             SR_PRINTLN(tasksArray[i].time_for_task % 60);
-            SR_PRINT(F("relay: "));
-            SR_PRINTLN(relayNameList[tasksArray[i].relay_index]);
-            SR_PRINT(F("action: "));
-            SR_PRINTLN(tasksArray[i].action_for_relay ? "on" : "off");
+            if (relayNameList != NULL)
+            {
+              SR_PRINT(F("relay: "));
+              SR_PRINTLN(relayNameList[tasksArray[i].relay_index]);
+              SR_PRINT(F("action: "));
+              SR_PRINTLN(tasksArray[i].action_for_relay ? "on" : "off");
+            }
 
             if (tasksArray[i].task_repeat == TR_ONCE)
             {
@@ -1857,7 +1883,7 @@ static bool set_task_tada(uint8_t _idx, shSchedulerData &_task)
       SR_PRINTLN(F("A task with these parameters already exists; the change has not been implemented"));
       return false;
     }
-    
+
     tasksArray[_idx] = _task;
     return save_config_file(mtTasks);
   }
@@ -1890,9 +1916,12 @@ static uint8_t get_task_count(bool is_active)
 
 static void getRelayNameList()
 {
-  for (uint8_t i = 0; i < relayNameCount; i++)
+  if (relayNameList != NULL)
   {
-    relayNameList[i] = (moduleFlag == mtRelay) ? relayArray[i].relayName : switchArray[i].relayName;
+    for (uint8_t i = 0; i < relayCount; i++)
+    {
+      relayNameList[i] = (moduleFlag == mtRelay) ? relayArray[i].relayName : switchArray[i].relayName;
+    }
   }
 }
 
@@ -1958,17 +1987,16 @@ static void set_ntp_data(bool _ntp_enabled,
 // ===================================================
 static bool is_valid_button(uint8_t _idx, srModuleType _mdl)
 {
-  uint8_t x = (_mdl == mtRelay) ? relayCount : switchCount;
-  bool result = _idx < x;
+  bool result = _idx < relayCount && buttonArray != NULL;
   if (result)
   {
     switch (_mdl)
     {
     case mtRelay:
-      result = relayArray[_idx].relayButton != nullptr;
+      result = relayArray[_idx].relayButtonPin >= 0;
       break;
     case mtSwitch:
-      result = switchArray[_idx].relayButton != nullptr;
+      result = switchArray[_idx].relayButtonPin >= 0;
       break;
     default:
       result = false;
@@ -1987,9 +2015,9 @@ static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    return (relayArray[_idx].relayButton->getLastState());
+    return (buttonArray[_idx].getLastState());
   case mtSwitch:
-    return (switchArray[_idx].relayButton->getLastState());
+    return (buttonArray[_idx].getLastState());
   default:
     return BTN_RELEASED;
   }
@@ -2004,9 +2032,9 @@ static bool is_button_closed(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    return (relayArray[_idx].relayButton->isButtonClosed());
+    return (buttonArray[_idx].isButtonClosed());
   case mtSwitch:
-    return (switchArray[_idx].relayButton->isButtonClosed());
+    return (buttonArray[_idx].isButtonClosed());
   default:
     return false;
   }
@@ -2024,11 +2052,11 @@ static bool is_second_button_pressed(uint8_t _idx,
   switch (_mdl)
   {
   case mtRelay:
-    return (relayArray[_idx].relayButton->isSecondButtonPressed(relayArray[_but_2].relayButton,
-                                                                btn_state));
+    return (buttonArray[_idx].isSecondButtonPressed(&buttonArray[_but_2],
+                                                    btn_state));
   case mtSwitch:
-    return (switchArray[_idx].relayButton->isSecondButtonPressed(relayArray[_but_2].relayButton,
-                                                                 btn_state));
+    return (buttonArray[_idx].isSecondButtonPressed(&buttonArray[_but_2],
+                                                    btn_state));
   default:
     return false;
   }
@@ -2043,10 +2071,10 @@ static void reset_button_state(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    relayArray[_idx].relayButton->resetButtonState();
+    buttonArray[_idx].resetButtonState();
     break;
   case mtSwitch:
-    switchArray[_idx].relayButton->resetButtonState();
+    buttonArray[_idx].resetButtonState();
     break;
   default:
     break;
@@ -2062,10 +2090,10 @@ static void set_long_click_mode(uint8_t _idx, uint8_t longclickmode, srModuleTyp
   switch (_mdl)
   {
   case mtRelay:
-    relayArray[_idx].relayButton->setLongClickMode(longclickmode);
+    buttonArray[_idx].setLongClickMode(longclickmode);
     break;
   case mtSwitch:
-    switchArray[_idx].relayButton->setLongClickMode(longclickmode);
+    buttonArray[_idx].setLongClickMode(longclickmode);
     break;
   default:
     break;
@@ -2081,10 +2109,10 @@ static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModu
   switch (_mdl)
   {
   case mtRelay:
-    relayArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
+    buttonArray[_idx].setTimeoutOfLongClick(new_timeout);
     break;
   case mtSwitch:
-    switchArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
+    buttonArray[_idx].setTimeoutOfLongClick(new_timeout);
     break;
   }
 }
@@ -2153,6 +2181,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
     doc[sr_module_description_str] = module_description;
     doc[sr_module_name_str] = module_name;
     doc[sr_udp_port_str] = udpPort;
+    doc[sr_udp_en_str] = (uint8_t)(udp != NULL);
     doc[sr_wificonf_str] = wifi_config_page;
     doc[sr_relayconf_str] = relay_config_page;
     doc[sr_tasksconf_str] = tasks_config_page;
@@ -2183,7 +2212,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
     doc[sr_for_str] = sr_switch_str;
     doc[sr_check_interval_str] = checkInterval / 60000ul;
 
-    for (int8_t i = 0; i < switchCount; i++)
+    for (int8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
       get_relay_data_json(rel,
@@ -2312,7 +2341,7 @@ static void handleReadTasksSetting()
   JsonArray relays = doc.createNestedArray(sr_r_list_str);
   if (relayNameList != NULL)
   {
-    for (uint8_t i = 0; i < relayNameCount; i++)
+    for (uint8_t i = 0; i < relayCount; i++)
     {
       relays.add(relayNameList[i]);
     }
@@ -2583,6 +2612,7 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
   switch (_mdt)
   {
   case mtRelay:
+  {
     x = doc[sr_relays_str].size();
     save_state_of_relay = doc[sr_save_state_str].as<bool>();
     for (int8_t i = 0; i < x && i < relayCount; i++)
@@ -2593,11 +2623,13 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
       relayArray[i].relayLastState = doc[sr_relays_str][i][sr_last_state_str].as<bool>();
     }
-    break;
+  }
+  break;
 
   case mtSwitch:
+  {
     x = doc[sr_relays_str].size();
-    for (int8_t i = 0; i < x && i < switchCount; i++)
+    for (int8_t i = 0; i < x && i < relayCount; i++)
     {
       getStringValue(switchArray[i].relayName,
                      doc[sr_relays_str][i][sr_name_str].as<String>());
@@ -2610,7 +2642,8 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
     checkInterval = doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
-    break;
+  }
+  break;
 
   case mtTasks:
   { // проверяем лимит задач, если нужно, ограничиваем размер

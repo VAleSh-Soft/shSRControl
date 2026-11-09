@@ -17,11 +17,13 @@
 #include <WiFiUdp.h>
 #include <shSRControl.h>
 
-#define FILESYSTEM SPIFFS
+#define BUTTON_1_PIN 17 // пин для подключения первой кнопки
+
+#define FILESYSTEM FFat
 // Вам нужно отформатировать файловую систему только один раз
 // после первого запуска нужно изменить эту настройку на false 
 // и перепрошить модуль еще раз
-#define FORMAT_FILESYSTEM true
+#define FORMAT_FILESYSTEM false
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
@@ -33,14 +35,11 @@ WiFiUDP udp;
 
 #if FILESYSTEM == FFat
 #include <FFat.h>
-#endif
-#if FILESYSTEM == SPIFFS
+#elif FILESYSTEM == SPIFFS
 #include <SPIFFS.h>
 #endif
 
 const int8_t ledPin = 4;
-
-srButton btn1(17);
 
 shRelayControl relay_control;
 
@@ -61,7 +60,7 @@ void setup()
   relay_control.setUdpPort(localPort);
 
   // заполняем данные локальных реле (локальная кнопка - только для первого реле)
-  relay_control.addRelay("relay1", 16, LOW, &btn1);
+  relay_control.addRelay("relay1", 16, LOW, BUTTON_1_PIN);
   relay_control.addRelay("relay2", 18, LOW);
 
   // не забудьте, форматировать файловую систему нужно только при первом запуске
@@ -101,7 +100,7 @@ void setup()
   // управлять модулем только через Web-интерфейс, то можете пропустить
   // этот шаг
   Serial.print(F("Starting UDP..."));
-  if (relay_control.startDevice(&udp))
+  if (relay_control.startUdpInteraction(&udp))
   {
     Serial.println(F("Device started"));
   }

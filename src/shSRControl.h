@@ -81,25 +81,25 @@ struct shRelayData
   uint8_t relayPin;          // пин, к которому подключено реле
   uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
   bool relayLastState;       // последнее состояние реле
-  srButton *relayButton;     // локальная кнопка, управляющая реле (располагается
+  int8_t relayButtonPin;     // пин локальной кнопки, управляющей реле (кнопка располагается
                              // на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
 
   shRelayData() : relayName(""),
                   relayPin(255),
                   relayControlLevel(HIGH),
-                  relayButton(nullptr),
+                  relayButtonPin(-1),
                   relayDescription(""),
                   relayLastState(false) {}
 
   shRelayData(String relay_name,
               uint8_t relay_pin,
               uint8_t control_level,
-              srButton *relay_button = nullptr,
+              int8_t relay_button_pin = -1,
               String relay_description = "") : relayName(relay_name),
                                                relayPin(relay_pin),
                                                relayControlLevel(control_level),
-                                               relayButton(relay_button),
+                                               relayButtonPin(relay_button_pin),
                                                relayDescription(relay_description),
                                                relayLastState(false) {}
 };
@@ -110,21 +110,22 @@ struct shSwitchData
   String relayName;        // имя ассоциированного с кнопкой удаленного реле
   bool relayFound;         // найдено или нет ассоциированное удаленное реле в сети
   IPAddress relayAddress;  // IP адрес удаленного реле
-  srButton *relayButton;   // кнопка, управляющая удаленным реле
+  int8_t relayButtonPin;   // кнопка, управляющая удаленным реле
   String relayDescription; // описание удаленного реле
+
   shSwitchData() : relayName(""),
-                   relayButton(nullptr),
+                   relayButtonPin(-1),
                    relayDescription(""),
                    relayFound(false),
-                   relayAddress(IPAddress(0, 0, 0, 0)) {}
+                   relayAddress(IPAddress(0ul)) {}
+
   shSwitchData(String relay_name,
-               srButton *relay_button = nullptr) : relayName(relay_name),
-                                                   relayButton(relay_button),
-                                                   relayDescription(""),
-                                                   relayFound(false),
-                                                   relayAddress(IPAddress(0, 0, 0, 0)) {}
+               int8_t relay_button_pin = -1) : relayName(relay_name),
+                                               relayButtonPin(relay_button_pin),
+                                               relayDescription(""),
+                                               relayFound(false),
+                                               relayAddress(IPAddress(0ul)) {}
 };
-// TODO: подумать над возможностью задания множественных реле, имеющих одно имя, но физически расположенных на разных модулях; т.е. добавить еще одно свойство и при его активации посылать запрос на переключение не по адресу, а широковещательным пакетом
 
 // ==== shRelayControl class ===========================
 
@@ -166,7 +167,7 @@ public:
   bool addRelay(const String &relay_name,
                 uint8_t relay_pin,
                 uint8_t control_level,
-                srButton *relay_button = nullptr,
+                int8_t relay_button_pin = -1,
                 const String &relay_description = "");
 
   /**
@@ -220,20 +221,20 @@ public:
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей 
-   * 
+   * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
+   *
    * @return true если сервер UDP запущен успешно, иначе false
    */
-  bool startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+  bool startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port);
 
   /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   * 
+   *
    * @return true если сервер UDP запущен успешно, иначе false
    */
-  bool startDevice(WiFiUDP *_udp);
+  bool startUdpInteraction(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса
@@ -506,9 +507,9 @@ public:
 
   /**
    * @brief поиск задачи с заданными параметрами
-   * 
+   *
    * @param _task структура, описывающая искомую задачу
-   * @return uint8_t 
+   * @return uint8_t
    */
   uint8_t findTask(shSchedulerData &_task);
 
@@ -547,7 +548,7 @@ public:
 
   /**
    * @brief установить статус задачи - активна / выключена
-   * 
+   *
    * @param _idx индекс задачи в списке планировщика
    * @param _state новый статус задачи
    */
@@ -555,11 +556,11 @@ public:
 
   /**
    * @brief изменить данные существующей задачи
-   * 
+   *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
-   * @return true 
-   * @return false 
+   * @return true
+   * @return false
    */
   bool setTaskData(uint8_t _idx, shSchedulerData &_task);
 
@@ -644,7 +645,7 @@ public:
    * @return true если данные добавлены успешно, иначе false
    */
   bool addRelay(const String &relay_name,
-                srButton *relay_button = nullptr);
+                int8_t relay_button_pin = -1);
 
   /**
    * @brief установка порта для отправки/приема udp-пакетов
@@ -720,19 +721,19 @@ public:
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
    * @param _udp_port порт для отправки/приема udp-пакетов; должен быть одинаковым для всех связанных модулей
-     * 
+   *
    * @return true если сервер UDP запущен успешно, иначе false
- */
-  bool startDevice(WiFiUDP *_udp, uint16_t _udp_port);
+   */
+  bool startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port);
 
   /**
    * @brief запуск модуля
    *
    * @param _udp ссылка на экземпляр **WiFiUDP**, который будет использоваться для работы модуля
-   * 
+   *
    * @return true если сервер UDP запущен успешно, иначе false
    */
-  bool startDevice(WiFiUDP *_udp);
+  bool startUdpInteraction(WiFiUDP *_udp);
 
   /**
    * @brief подключение Web-интерфейса
@@ -964,9 +965,9 @@ public:
 
   /**
    * @brief поиск задачи с заданными параметрами
-   * 
+   *
    * @param _task структура, описывающая искомую задачу
-   * @return uint8_t 
+   * @return uint8_t
    */
   uint8_t findTask(shSchedulerData &_task);
 
@@ -1005,7 +1006,7 @@ public:
 
   /**
    * @brief установить статус задачи - активна / выключена
-   * 
+   *
    * @param _idx индекс задачи в списке планировщика
    * @param _state новый статус задачи
    */
@@ -1013,11 +1014,11 @@ public:
 
   /**
    * @brief изменить данные существующей задачи
-   * 
+   *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
-   * @return true 
-   * @return false 
+   * @return true
+   * @return false
    */
   bool setTaskData(uint8_t _idx, shSchedulerData &_task);
 

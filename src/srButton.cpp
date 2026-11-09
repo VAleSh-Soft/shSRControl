@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "srButtons.h"
 
-
 // ---- srButton private -----------------------
 
 bool srButton::getFlag(uint8_t _bit)
@@ -66,6 +65,12 @@ srButton::srButton(uint8_t pin, uint16_t deb)
   _debounce_timeout = deb;
   setFlag(INPUTTYPE_BIT, PULL_UP);
   pinMode(_PIN, INPUT_PULLUP);
+  setFlag(BTNTYPE_BIT, BTN_NO);
+}
+
+srButton::srButton()
+{
+  setFlag(INPUTTYPE_BIT, PULL_UP);
   setFlag(BTNTYPE_BIT, BTN_NO);
 }
 

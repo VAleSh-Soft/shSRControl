@@ -19,9 +19,9 @@
 #include <FS.h>
 #include <shSRControl.h>
 
-// модуль WiFi-реле (розетка, люстра и т.д.)
+#define BUTTON_1_PIN D5
 
-#define FILESYSTEM SPIFFS
+#define FILESYSTEM LittleFS
 
 const char *const ssid = "**********"; // имя (SSID) вашей Wi-Fi сети
 const char *const pass = "**********"; // пароль для подключения к вашей Wi-Fi сети
@@ -36,8 +36,6 @@ WiFiUDP udp;
 #endif
 
 const int8_t ledPin = LED_BUILTIN;
-
-srButton btn1(D5);
 
 shRelayControl relay_control;
 
@@ -58,7 +56,7 @@ void setup()
   relay_control.setUdpPort(localPort);
 
   // заполняем данные локальных реле (локальная кнопка - только для первого реле)
-  relay_control.addRelay("relay1", D1, LOW, &btn1);
+  relay_control.addRelay("relay1", D1, LOW, BUTTON_1_PIN);
   relay_control.addRelay("relay2", D2, LOW);
 
   // подключаем Web-интерфейс
@@ -93,7 +91,7 @@ void setup()
   // управлять модулем только через Web-интерфейс, то можете пропустить
   // этот шаг
   Serial.print(F("Starting UDP..."));
-  if (relay_control.startDevice(&udp))
+  if (relay_control.startUdpInteraction(&udp))
   {
     Serial.println(F("Device started"));
   }
