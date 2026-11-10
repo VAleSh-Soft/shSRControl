@@ -99,7 +99,6 @@ void setup()
   // если вы не собираетесь использовать WiFi-выключатели и планируете
   // управлять модулем только через Web-интерфейс, то можете пропустить
   // этот шаг
-  Serial.print(F("Starting UDP..."));
   if (relay_control.startUdpInteraction(&udp))
   {
     Serial.println(F("Device started"));
@@ -109,6 +108,15 @@ void setup()
     Serial.println(F("failed, restart"));
     ESP.restart();
   }
+
+  // добавить в планировщик задачу, которая будет включать реле с индексом 1
+  // по понедельникам, средам и пятницам в 21:30
+  shSchedulerData task(true, // задача активна
+                       21 * 60 + 30,
+                       1,
+                       true,
+                       (shTaskRepeat)(TR_MON_DAY | TR_WED_DAY | TR_FRI_DAY));
+  relay_control.addTaskToList(task);
 
   // запускаем HTTP-сервер
   HTTP.onNotFound([]()

@@ -114,5 +114,7 @@ public:
 
   // установка интервала удержания кнопки (значение по умолчанию 1000 мс);
   void setTimeoutOfLongClick(uint16_t new_timeout);
-};
 
+  // установка интервала подавления дребезга контактов (значение по умолчанию 50 мс);
+  void setTimeoutOfDebounce(uint16_t new_timeout);
+};

@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Настройка модуля</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --border: #d7dde3;
+        --text: #1f2933;
+        --muted: #7b8794;
+        --accent: #2563eb;
+        --danger: #dc2626;
+        --selected: #e8f1ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.45 "Segoe UI",
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+
+      #main {
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin: 0 0 16px;
+        text-align: center;
+      }
+
+      /* ======================== ВКЛАДКИ ======================== */
+      /* вкладки переключаются радиокнопками (работают без JS), поэтому
+         label'ы идут inline-block по 50%: между ними нет whitespace-разрыва */
+      .tabs {
+        margin-bottom: 16px;
+      }
+
+      .tabs > h3 {
+        font-size: 24px;
+        margin: 0 0 16px;
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .tabs > input[type="radio"] {
+        display: none;
+      }
+
+      .tabs > label {
+        display: inline-block;
+        width: 50%;
+        padding: 8px 0;
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        transition:
+          color 0.2s,
+          background-color 0.2s;
+      }
+
+      .tabs > label:hover {
+        color: var(--text);
+      }
+
+      /* активная вкладка стыкуется с панелью контента */
+      #tab-btn-1:checked ~ #tab-label-1,
+      #tab-btn-2:checked ~ #tab-label-2 {
+        background: var(--panel);
+        color: var(--accent);
+        position: relative;
+        z-index: 1;
+      }
+
+      /* панели контента; .save-row не панель, поэтому класс, а не .tabs > div */
+      .tabs > div.tab-panel {
+        display: none;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 0 8px 8px 8px;
+        padding: 12px 14px;
+        margin: 0 0 16px;
+      }
+
+      #tab-btn-1:checked ~ #relay_list,
+      #tab-btn-2:checked ~ #setup_list {
+        display: block;
+      }
+
+      .tab-panel h4 {
+        font-size: 16px;
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+
+      /* ======================== ПОЛЯ ======================== */
+      .field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .field label,
+      .field > span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .field input[type="text"],
+      .field input[type="number"],
+      .field select {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
+      }
+
+      /* метка над полем, поле на всю ширину */
+      .field:has(input[type="text"]) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+      }
+      .field:has(input[type="text"]) input {
+        width: 100%;
+      }
+
+      /* строка затемняется, когда поле недоступно */
+      .field:has(input:disabled) {
+        opacity: 0.5;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      input[type="checkbox"]:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      input[type="text"]:disabled,
+      input[type="number"]:disabled {
+        opacity: 0.4;
+        cursor: default;
+        background: #f5f5f5;
+      }
+
+      /* ======================== КНОПКИ ======================== */
+      .btn {
+        padding: 8px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn.danger {
+        color: var(--danger);
+      }
+      .btn.danger:hover {
+        border-color: var(--danger);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .save-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .save-row .btn {
+        min-width: 120px;
+      }
+
+      /* маркер адреса JSON-эндпоинта, который подставляет прошивка */
+      #label {
+        display: none;
+      }
+
+      /* динамические поля реле (создаются через JS) */
+      #relay_list label {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        margin: 0 0 4px;
+      }
+      #relay_list input[type="text"] {
+        display: block;
+        width: 100%;
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font: inherit;
+        color: var(--text);
+        background: #fff;
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="label"></p>
+    <div id="main">
+      <div class="tabs">
+        <h3 id="h3"></h3>
+        <input
+          type="radio"
+          name="tab-btn"
+          id="tab-btn-1"
+          value=""
+          checked
+        /><label id="tab-label-1" for="tab-btn-1">Список реле</label
+        ><input type="radio" name="tab-btn" id="tab-btn-2" value="" /><label
+          id="tab-label-2"
+          for="tab-btn-2"
+          >Настройки</label
+        >
+        <div class="tab-panel" id="relay_list">
+          <datalist id="remote_relays"></datalist>
+          <h4 id="h4"></h4>
+        </div>
+        <div class="tab-panel" id="setup_list">
+          <h4>Сетевые настройки модуля</h4>
+          <div class="field">
+            <label for="module_name">Имя модуля</label
+            ><input
+              type="text"
+              id="module_name"
+              maxlength="16"
+              placeholder="Имя модуля"
+            />
+          </div>
+          <div class="field">
+            <label for="module_descr">Описание модуля</label
+            ><input
+              type="text"
+              id="module_descr"
+              maxlength="64"
+              placeholder="Описание модуля"
+            />
+          </div>
+          <div class="field">
+            <label for="udp_port">Порт для приема/отправки пакетов</label
+            ><input
+              type="number"
+              id="udp_port"
+              min="1"
+              max="65535"
+              placeholder="Порт UDP"
+              disabled
+            />
+          </div>
+          <h4>Прочие настройки</h4>
+          <!-- label оборачивает чекбокс: getConfig() скрывает строку через
+               display:none на save_last_state -->
+          <label class="field" id="save_last_state">
+            <span>Сохранять состояние реле при перезагрузке</span>
+            <input type="checkbox" id="save_state" />
+          </label>
+          <div class="field">
+            <label id="check_int_l" for="check_int"
+              >Интервал проверки удаленных реле, минут</label
+            >
+            <input
+              type="number"
+              id="check_int"
+              min="0"
+              max="1800"
+              placeholder="Интервал"
+            />
+          </div>
+          <input
+            type="button"
+            id="btn_rst"
+            class="btn danger"
+            style="margin-top: 12px; width: 100%"
+            value="Перезагрузить модуль"
+            onclick="restartESP()"
+          />
+        </div>
+        <div class="save-row">
+          <button class="btn" onclick="window.open('/', '_self', false)">
+            Назад
+          </button>
+          <button
+            id="btn_save"
+            class="btn primary"
+            onclick="sendData()"
+            disabled
+          >
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      var dest;
+      function showAlert(doc) {
+        if (
+          doc.value.length > 0 &&
+          (doc.value.length < 6 || doc.value.length > 16)
+        ) {
+          alert(
+            "Длина имени должна быть не менее 6 и не более 16 символов! \n\n Разрешенные символы: 0..9, A..Z, a..z, - , _",
+          );
+          doc.focus();
+          return false;
+        }
+        return true;
+      }
+      function checkName() {
+        var relays = document
+          .getElementById("relay_list")
+          .getElementsByClassName("relay");
+        for (var i = 0, len = relays.length; i < len; i++) {
+          if (!showAlert(relays[i])) {
+            return false;
+          }
+        }
+        if (!showAlert(document.getElementById("module_name"))) return false;
+        return true;
+      }
+      function sendData() {
+        if (!checkName()) {
+          return;
+        }
+        document.getElementById("btn_save").disabled = "disabled";
+        var values = [];
+        var relays = document
+          .getElementById("relay_list")
+          .getElementsByClassName("relay");
+        var descrs = document
+          .getElementById("relay_list")
+          .getElementsByClassName("descr");
+        for (var i = 0, len = relays.length; i < len; ++i) {
+          let rel = { name: relays[i].value, descr: descrs[i].value };
+          values.push(rel);
+        }
+        var f_data = {
+          for: dest,
+          module_descr: document.getElementById("module_descr").value,
+          module_name: document.getElementById("module_name").value,
+          udp_port: document.getElementById("udp_port").value,
+          save_state: document.getElementById("save_state").checked,
+          check_int: document.getElementById("check_int").value,
+          relays: values,
+        };
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/sr_setconfig", true);
+        xhr.setRequestHeader("Content-Type", "text/json");
+        xhr.onreadystatechange = function () {
+          document.body.innerHTML = this.responseText;
+        };
+        xhr.send(JSON.stringify(f_data));
+      }
+      function btnSaveEnabled() {
+        document.getElementById("btn_save").removeAttribute("disabled");
+      }
+      function checkString() {
+        this.value = this.value.replace(/[^a-zA-Z0-9_/-]/g, "");
+        btnSaveEnabled();
+      }
+      function getConfig() {
+        var c_lab = document.getElementById("label");
+        var c_page = c_lab.innerHTML;
+        c_lab.innerHTML = "";
+        var request = new XMLHttpRequest();
+        request.open("GET", c_page, true);
+        request.onload = function () {
+          if (request.readyState == 4 && request.status == 200) {
+            var config_str = request.responseText;
+            var doc = JSON.parse(config_str);
+            dest = doc.for;
+            if (doc.module_descr != "null")
+              document.getElementById("module_descr").value = doc.module_descr;
+            if (doc.module_name != "null")
+              document.getElementById("module_name").value = doc.module_name;
+            document.getElementById("udp_port").value = doc.udp_port;
+            if (doc.udp_en == 1) {
+              document.getElementById("udp_port").removeAttribute("disabled");
+            }
+            document.getElementById("h3").innerHTML =
+              dest == "relay"
+                ? "Модуль WiFi-реле - настройка"
+                : "Модуль WiFi-выключателя - настройка";
+            document.getElementById("h4").innerHTML =
+              dest == "relay"
+                ? "Сетевые идентификаторы реле"
+                : "Идентификаторы удаленных реле";
+            var d = document.getElementById("relay_list");
+            if (dest != "relay") {
+              document.getElementById("save_last_state").style.display = "none";
+              document.getElementById("check_int").value = doc.check_int;
+            } else {
+              document.getElementById("check_int").style.display = "none";
+              document.getElementById("check_int_l").style.display = "none";
+              doc.save_state == 1
+                ? document
+                    .getElementById("save_state")
+                    .setAttribute("checked", "checked")
+                : document
+                    .getElementById("save_state")
+                    .removeAttribute("checked");
+            }
+            for (var i = 0; i < doc.relays.length; i++) {
+              const lab = document.createElement("label");
+              lab.innerHTML =
+                dest == "relay"
+                  ? "Реле №" + String(i + 1)
+                  : "Кнопка №" + String(i + 1);
+              d.append(lab);
+              const inp1 = document.createElement("input");
+              inp1.type = "text";
+              inp1.maxLength = "16";
+              inp1.className = "relay";
+              inp1.placeholder = "Идентификатор реле";
+              inp1.setAttribute("list", "remote_relays");
+              inp1.addEventListener("input", checkString);
+              inp1.value = doc.relays[i].name;
+              d.append(inp1);
+              const inp2 = document.createElement("input");
+              inp2.type = "text";
+              inp2.maxLength = "64";
+              inp2.className = "descr";
+              inp2.placeholder = "Описание реле";
+              if (dest == "switch") {
+                inp2.disabled = true;
+              }
+              inp2.addEventListener("input", (event) => btnSaveEnabled());
+              inp2.value = doc.relays[i].descr;
+              d.append(inp2);
+            }
+          }
+        };
+        request.send();
+      }
+      function getRelayList() {
+        var request = new XMLHttpRequest();
+        request.open("GET", "/get_relay_list", true);
+        request.onload = function () {
+          if (request.readyState == 4 && request.status == 200) {
+            var config_str = request.responseText;
+            var doc = JSON.parse(config_str);
+            const dataList = document.getElementById("remote_relays");
+            for (var i = 0; i < doc.relays.length; i++) {
+              const option = document.createElement("option");
+              option.textContent = doc.relays[i].relay;
+              dataList.appendChild(option);
+            }
+          }
+        };
+        request.send();
+      }
+      function restartESP() {
+        if (!document.getElementById("btn_save").hasAttribute("disabled")) {
+          if (
+            !confirm("Настройки были изменены. Все равно перезагрузить модуль?")
+          )
+            return;
+        } else {
+          if (!confirm("Вы действительно хотите перезагрузить модуль?")) return;
+        }
+        var request = new XMLHttpRequest();
+        request.open("GET", "/sr_restart", true);
+        request.onload = function () {
+          document.body.innerHTML = '<p align="center">Module restart...</p>';
+          setTimeout(function () {
+            window.location.href = "/";
+          }, 5 * 1000);
+        };
+        request.send();
+      }
+      document
+        .getElementById("module_descr")
+        .addEventListener("input", btnSaveEnabled);
+      document
+        .getElementById("udp_port")
+        .addEventListener("input", btnSaveEnabled);
+      document
+        .getElementById("save_state")
+        .addEventListener("input", btnSaveEnabled);
+      document
+        .getElementById("check_int")
+        .addEventListener("input", btnSaveEnabled);
+      document
+        .getElementById("module_name")
+        .addEventListener("input", checkString);
+      document.addEventListener("DOMContentLoaded", function () {
+        getConfig();
+        getRelayList();
+      });
+    </script>
+  </body>
+</html>

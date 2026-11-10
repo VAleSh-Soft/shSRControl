@@ -46,7 +46,7 @@ setRelayDescription	KEYWORD2
 getRelayDescription	KEYWORD2
 setFileName	KEYWORD2
 getFileName	KEYWORD2
-saveConfige	KEYWORD2
+saveConfig	KEYWORD2
 loadConfige	KEYWORD2
 setCheckTimer	KEYWORD2
 getCheckTimer	KEYWORD2
@@ -72,6 +72,7 @@ isSecondButtonPressed	KEYWORD2
 resetButtonState	KEYWORD2
 setButtonLongClickMode	KEYWORD2
 setButtonTimeoutOfLongClick	KEYWORD2
+setButtonTimeoutOfDebounce	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

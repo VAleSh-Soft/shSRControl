@@ -411,7 +411,7 @@ public:
    * @return true
    * @return false
    */
-  bool saveConfige(srModuleType _mdl = mtRelay);
+  bool saveConfig(srModuleType _mdl = mtRelay);
 
   /**
    * @brief считывание и загрузка сохраненных в файле настроек
@@ -609,6 +609,13 @@ public:
    * @param new_timeout новый интервал в милисекундах
    */
   void setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout);
+
+  /**
+   * @brief установка интервала подавления дребезга контактов кнопки (значение по умолчанию 50 мс)
+   * 
+   * @param new_timeout 
+   */
+  void setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout);
 };
 
 // ==== shSwitchControl class ==========================
@@ -869,7 +876,7 @@ public:
    * @return true
    * @return false
    */
-  bool saveConfige(srModuleType _mdl = mtSwitch);
+  bool saveConfig(srModuleType _mdl = mtSwitch);
 
   /**
    * @brief считывание и загрузка сохраненных в файле настроек
@@ -1067,6 +1074,13 @@ public:
    * @param new_timeout новый интервал в милисекундах
    */
   void setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout);
+
+  /**
+   * @brief установка интервала подавления дребезга контактов кнопки (значение по умолчанию 50 мс)
+   * 
+   * @param new_timeout 
+   */
+  void setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout);
 };
 
 // ==== shBuzzer class ===============================

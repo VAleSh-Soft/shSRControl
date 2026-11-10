@@ -100,18 +100,18 @@ static const char NTP_DATA[] PROGMEM = "/ntp";
 static const uint16_t CONFIG_SIZE = 2048;
 static const uint8_t MAX_TASKS_COUNT = 16;
 static const uint8_t MAX_RELAY_COUNT = 10;
-static const uint16_t RELAY_LIST_DATA_SIZE = 256;
+// static const uint16_t RELAY_LIST_DATA_SIZE = 256;
 #else
 static const uint16_t CONFIG_SIZE = 4096;
 static const uint8_t MAX_TASKS_COUNT = 32;
 static const uint8_t MAX_RELAY_COUNT = 20;
-static const uint16_t RELAY_LIST_DATA_SIZE = 512;
+// static const uint16_t RELAY_LIST_DATA_SIZE = 512;
 #endif
 static const uint16_t RELAY_DATA_SIZE = 256;
 
 // ==== общие данные =================================
 
-srModuleType moduleFlag = mtRelay;
+static srModuleType moduleFlag = mtRelay;
 
 static shRelayData *relayArray = NULL;
 static shSwitchData *switchArray = NULL;
@@ -159,6 +159,7 @@ static String tasks_config_page = "";
 static IPAddress get_broadcast_address();
 static bool get_value_of_argument(String &_res, const String &_arg, String &_str);
 static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize);
+static bool get_udp_string(String &_str, int _size);
 static String get_argument(String &_res, const String &_arg);
 static String get_json_string_to_send(const String &_name, const String &_comm);
 static String get_json_string_to_send(const String &_name,
@@ -180,7 +181,7 @@ static void find_remote_relays();
 
 static void set_udp_port(uint16_t _udp_port);
 static uint16_t get_udp_port();
-static bool start_device(WiFiUDP *_udp, uint16_t _udp_port);
+static bool start_udp_interaction(WiFiUDP *_udp, uint16_t _udp_port);
 
 static int8_t addRelayToListOfRemoteRelays(const String &relay_name);
 static void clearListOfRemoteRelays();
@@ -197,7 +198,7 @@ static int8_t find_task(shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
 static bool del_task_in_list(uint8_t _idx);
 static void set_task_status(uint8_t _idx, bool _state);
-static bool set_task_tada(uint8_t _idx, shSchedulerData &_task);
+static bool set_task_data(uint8_t _idx, shSchedulerData &_task);
 static uint8_t get_task_count(bool is_active = false);
 static void getRelayNameList();
 static void set_local_time(time_t _now);
@@ -219,6 +220,7 @@ static bool is_second_button_pressed(uint8_t _idx,
 static void reset_button_state(uint8_t _idx, srModuleType _mdl);
 static void set_long_click_mode(uint8_t _idx, uint8_t longclickmode, srModuleType _mdl);
 static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl);
+static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl);
 
 // ===================================================
 static void handleGetConfigPage(String arg, String page);
@@ -287,6 +289,8 @@ shRelayControl::shRelayControl() { moduleFlag = mtRelay; }
 
 void shRelayControl::init(uint8_t _relay_count)
 {
+  _relay_count = (_relay_count > MAX_RELAY_COUNT) ? MAX_RELAY_COUNT : _relay_count;
+
   // защита от утечки памяти при повторном вызове init()
   if (relayArray)
   {
@@ -369,12 +373,12 @@ void shRelayControl::setBtnBeepData(uint16_t _freq, uint32_t _dur)
 
 bool shRelayControl::startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port)
 {
-  return start_device(_udp, _udp_port);
+  return start_udp_interaction(_udp, _udp_port);
 }
 
 bool shRelayControl::startUdpInteraction(WiFiUDP *_udp)
 {
-  return start_device(_udp, udpPort);
+  return start_udp_interaction(_udp, udpPort);
 }
 
 void shRelayControl::attachWebInterface(shWebServer *_server,
@@ -500,7 +504,7 @@ void shRelayControl::respondToRelayCheck(int8_t index)
   }
 }
 
-void set_state(int8_t relay_index, String comm)
+static void set_state(int8_t relay_index, String comm)
 {
   if ((relay_index >= 0) && (relay_index < relayCount))
   {
@@ -524,16 +528,13 @@ void set_state(int8_t relay_index, String comm)
 
 void shRelayControl::receiveUdpPacket(int _size)
 {
-  char _str[_size + 1] = {0};
-
-  udp->read(_str, _size);
-#if defined(ARDUINO_ARCH_ESP8266)
-  udp->flush();
-#else
-  udp->clear();
-#endif
-
-  String _resp = String(_str);
+  String _resp;
+  // пакет не прочитан - не отвечаем на него, иначе модуль будет отвечать
+  // на мусор и на заведомо неподходящие пакеты
+  if (!get_udp_string(_resp, _size))
+  {
+    return;
+  }
   String arg_comm = get_argument(_resp, sr_command_str);
   String arg_name = get_argument(_resp, sr_name_str);
 
@@ -719,7 +720,7 @@ String shRelayControl::getFileName(srModuleType _mdl)
   return (get_config_file_name(_mdl));
 }
 
-bool shRelayControl::saveConfige(srModuleType _mdl)
+bool shRelayControl::saveConfig(srModuleType _mdl)
 {
   return (save_config_file(_mdl));
 }
@@ -818,7 +819,7 @@ void shRelayControl::setTaskStatus(uint8_t _idx, bool _state)
 
 bool shRelayControl::setTaskData(uint8_t _idx, shSchedulerData &_task)
 {
-  return set_task_tada(_idx, _task);
+  return set_task_data(_idx, _task);
 }
 
 uint8_t shRelayControl::getButtonState(uint8_t _idx)
@@ -853,12 +854,19 @@ void shRelayControl::setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_time
   set_timeout_of_long_click(_idx, new_timeout, mtRelay);
 }
 
+void shRelayControl::setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout)
+{
+  set_timeout_of_debounce(_idx, new_timeout, mtRelay);
+}
+
 // ==== shSwitchControl class ==========================
 
 shSwitchControl::shSwitchControl() { moduleFlag = mtSwitch; }
 
 void shSwitchControl::init(uint8_t _switch_count)
 {
+  _switch_count = (_switch_count > MAX_RELAY_COUNT) ? MAX_RELAY_COUNT : _switch_count;
+
   // защита от утечки памяти при повторном вызове init()
   if (switchArray)
   {
@@ -940,12 +948,12 @@ uint32_t shSwitchControl::getCheckTimer() { return (checkInterval); }
 
 bool shSwitchControl::startUdpInteraction(WiFiUDP *_udp, uint16_t _udp_port)
 {
-  return start_device(_udp, _udp_port);
+  return start_udp_interaction(_udp, _udp_port);
 }
 
 bool shSwitchControl::startUdpInteraction(WiFiUDP *_udp)
 {
-  return start_device(_udp, udpPort);
+  return start_udp_interaction(_udp, udpPort);
 }
 
 void shSwitchControl::attachWebInterface(shWebServer *_server,
@@ -1049,16 +1057,13 @@ void shSwitchControl::tick()
 
 void shSwitchControl::receiveUdpPacket(int _size)
 {
-  char _str[_size + 1] = {0};
-
-  udp->read(_str, _size);
-#if defined(ARDUINO_ARCH_ESP8266)
-  udp->flush();
-#else
-  udp->clear();
-#endif
-
-  String _resp = String(_str);
+  String _resp;
+  // пакет не прочитан - не отвечаем на него, иначе модуль будет отвечать
+  // на мусор и на заведомо неподходящие пакеты
+  if (!get_udp_string(_resp, _size))
+  {
+    return;
+  }
 
   String arg_for = get_argument(_resp, sr_for_str);
   String arg_name = get_argument(_resp, sr_name_str);
@@ -1238,7 +1243,7 @@ String shSwitchControl::getFileName(srModuleType _mdl)
   return (get_config_file_name(_mdl));
 }
 
-bool shSwitchControl::saveConfige(srModuleType _mdl)
+bool shSwitchControl::saveConfig(srModuleType _mdl)
 {
   return (save_config_file(_mdl));
 }
@@ -1338,7 +1343,7 @@ void shSwitchControl::setTaskStatus(uint8_t _idx, bool _state)
 
 bool shSwitchControl::setTaskData(uint8_t _idx, shSchedulerData &_task)
 {
-  return set_task_tada(_idx, _task);
+  return set_task_data(_idx, _task);
 }
 
 uint8_t shSwitchControl::getButtonState(uint8_t _idx)
@@ -1371,6 +1376,11 @@ void shSwitchControl::setButtonLongClickMode(uint8_t _idx, uint8_t longclickmode
 void shSwitchControl::setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout)
 {
   set_timeout_of_long_click(_idx, new_timeout, mtSwitch);
+}
+
+void shSwitchControl::setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout)
+{
+  set_timeout_of_debounce(_idx, new_timeout, mtSwitch);
 }
 
 // ===================================================
@@ -1424,16 +1434,8 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
   bool result = (udp != NULL) ? udp->beginPacket(address, udpPort) : false;
   if (result)
   {
-    uint8_t *_buf = new (std::nothrow) uint8_t[bufSize];
-    result = (_buf != NULL);
-    if (result)
-    {
-      memcpy(_buf, buf, bufSize);
-      udp->write(_buf, bufSize) == bufSize;
-      delete[] _buf;
-
-      result = udp->endPacket() == 1;
-    }
+    result = (udp->write(reinterpret_cast<const uint8_t *>(buf), bufSize) == bufSize) &&
+             (udp->endPacket() == 1);
   }
 
   if (!result)
@@ -1445,6 +1447,42 @@ static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bu
   }
 
   return (result);
+}
+
+static bool get_udp_string(String &_str, int _size)
+{
+#if defined(ARDUINO_ARCH_ESP8266)
+  if (_size > 1024)
+  {
+    SR_PRINTLN(F("Error: too big size of UDP packet"));
+    udp->flush();
+    return false;
+  }
+#endif
+  char *res = new (std::nothrow) char[_size + 1];
+  if (res == nullptr)
+  {
+    SR_PRINTLN(F("Error: memory allocation failed for UDP packet"));
+#if defined(ARDUINO_ARCH_ESP8266)
+    udp->flush();
+#else
+    udp->clear();
+#endif
+    return false;
+  }
+
+  int read_bytes = udp->read(res, _size);
+  res[read_bytes > 0 ? read_bytes : 0] = 0;
+#if defined(ARDUINO_ARCH_ESP8266)
+  udp->flush();
+#else
+  udp->clear();
+#endif
+  _str = String(res);
+
+  delete[] res;
+  res = NULL;
+  return (read_bytes > 0);
 }
 
 static String get_argument(String &_res, const String &_arg)
@@ -1629,7 +1667,7 @@ static uint16_t get_udp_port()
   return udpPort;
 }
 
-static bool start_device(WiFiUDP *_udp, uint16_t _udp_port)
+static bool start_udp_interaction(WiFiUDP *_udp, uint16_t _udp_port)
 {
   udp = _udp;
   udpPort = _udp_port;
@@ -1692,14 +1730,14 @@ static void arrays_init(uint8_t _count)
     delete[] relayNameList;
   }
 
-  relayNameList = new (std::nothrow) String[relayCount];
+  relayNameList = new (std::nothrow) String[_count];
 
   if (buttonArray)
   {
     delete[] buttonArray;
   }
 
-  buttonArray = new (std::nothrow) srButton[relayCount];
+  buttonArray = new (std::nothrow) srButton[_count];
 }
 
 // ==== обработка списка заданий планировщика ========
@@ -1719,7 +1757,8 @@ static void checkTasksList(srModuleType _mdt)
       for (uint8_t i = 0; i < tasksCount; i++)
       {
         if ((tasksArray[i].task_status) &&
-            ((tasksArray[i].time_for_task * 60) == cur_time))
+            ((tasksArray[i].time_for_task * 60) == cur_time) &&
+            (tasksArray[i].relay_index < relayCount))
         {
           if (tasksArray[i].task_repeat == TR_DAILY ||
               tasksArray[i].task_repeat == TR_ONCE ||
@@ -1771,7 +1810,7 @@ static bool check_day_of_week(uint8_t _day, shTaskRepeat _per)
   // в структуре tm день недели кодируется 0(вск)..6(сбт)
   // у нас день недели кодируется 0(пнд)..6(вск)
   // поэтому приводим день недели к нужному виду
-  _day = (_day) ? --_day : 6;
+  _day = (_day > 0) ? (_day - 1) : 6;
   // проверяем наличие нужного бита и возвращаем результат
   return ((uint8_t)_per & 1 << _day);
 }
@@ -1874,7 +1913,7 @@ static void set_task_status(uint8_t _idx, bool _state)
   }
 }
 
-static bool set_task_tada(uint8_t _idx, shSchedulerData &_task)
+static bool set_task_data(uint8_t _idx, shSchedulerData &_task)
 {
   if (_idx < tasksCount)
   {
@@ -1958,7 +1997,8 @@ static void set_ntp_data(bool _ntp_enabled,
                          String _ntp_server3)
 {
   ntp_enabled = _ntp_enabled;
-  tz_offset = _tz;
+  // контроль данных: не меньше -12 часов (-720) и не больше 14 часов (840)
+  tz_offset = (_tz > 840) ? 840 * 60 : ((_tz < -720) ? -720 * 60 : _tz * 60);
   if (_ntp_server1.length() > 0)
   {
     ntp_server1 = _ntp_server1;
@@ -2113,6 +2153,23 @@ static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModu
     break;
   case mtSwitch:
     buttonArray[_idx].setTimeoutOfLongClick(new_timeout);
+    break;
+  }
+}
+
+static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl)
+{
+  if (!is_valid_button(_idx, _mdl))
+  {
+    return;
+  }
+  switch (_mdl)
+  {
+  case mtRelay:
+    buttonArray[_idx].setTimeoutOfDebounce(new_timeout);
+    break;
+  case mtSwitch:
+    buttonArray[_idx].setTimeoutOfDebounce(new_timeout);
     break;
   }
 }
@@ -2602,7 +2659,9 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
     // только для mtRelay и mtSwitch
     getStringValue(module_description, doc[sr_module_description_str].as<String>());
     getStringValue(module_name, doc[sr_module_name_str].as<String>());
-    udpPort = doc[sr_udp_port_str].as<uint16_t>();
+    udpPort = (doc[sr_udp_port_str].isNull()) ? DEFAULT_UDP_PORT
+                                              : doc[sr_udp_port_str].as<uint16_t>();
+
     if (udpPort == 0)
     {
       udpPort = DEFAULT_UDP_PORT;
@@ -2641,7 +2700,8 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
       getStringValue(switchArray[i].relayDescription,
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
-    checkInterval = doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
+    checkInterval = (doc[sr_check_interval_str].isNull()) ? DEFAULT_CHECK_INTERVAL
+                                                          : doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
   }
   break;
 
@@ -2664,6 +2724,11 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
         tasksArray[tasksCount].task_status = t_list_item[sr_state_str].as<bool>();
         tasksArray[tasksCount].time_for_task = t_list_item[sr_time_str].as<uint32_t>();
         tasksArray[tasksCount].relay_index = t_list_item[sr_rel_str].as<uint8_t>();
+        if (tasksArray[tasksCount].relay_index >= relayCount)
+        {
+          tasksArray[tasksCount].relay_index = relayCount - 1;
+        }
+
         tasksArray[tasksCount].action_for_relay = t_list_item[sr_act_str].as<bool>();
         tasksArray[tasksCount].task_repeat = (shTaskRepeat)t_list_item[sr_rep_str].as<uint8_t>();
         if (++tasksCount >= count)
@@ -2845,7 +2910,7 @@ static bool load_config_file(srModuleType _mdt)
 
 // ==== shBuzzer class ===============================
 
-void buzzerTick()
+static void buzzerTick()
 {
   bzr.beep();
   if (bzr.decBipCount() == 0)

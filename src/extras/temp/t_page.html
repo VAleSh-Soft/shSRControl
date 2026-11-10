@@ -1,0 +1,1463 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Планировщик задач</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --border: #d7dde3;
+        --text: #1f2933;
+        --muted: #7b8794;
+        --accent: #2563eb;
+        --danger: #dc2626;
+        --selected: #e8f1ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.45 "Segoe UI",
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+
+      #main {
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin: 0 0 16px;
+        text-align: center;
+      }
+
+      /* ======================== ВКЛАДКИ ======================== */
+      .tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 16px;
+        border-bottom: 2px solid var(--border);
+      }
+
+      .tab-btn {
+        flex: 1;
+        padding: 8px 0;
+        border-radius: 6px 6px 0 0;
+        background: var(--panel);
+        color: var(--muted);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
+        border: 1px solid transparent;
+        border-bottom: none;
+      }
+
+      .tab-btn:hover {
+        color: var(--text);
+      }
+
+      .tab-btn.active {
+        color: var(--accent);
+        border-color: var(--border);
+        border-bottom: 2px solid var(--panel);
+        background: var(--panel);
+        margin-bottom: -2px;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      /* блок времени: локальное, модуля и кнопка синхронизации */
+      .time-bar {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 28px 0 0;
+      }
+
+      /* поле в time-bar без верхнего отступа, от sync-row — 12px */
+      .time-bar .field {
+        margin: 14px 0 0;
+      }
+
+      /* текущее время внутри блока */
+      .clock {
+        margin: 0 0 4px;
+        color: var(--muted);
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .clock-label {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-right: 6px;
+      }
+      .clock.unsynced {
+        opacity: 0.6;
+      }
+
+      /* строка с кнопкой синхронизации времени */
+      .sync-row {
+        margin: 12px 0 0;
+        text-align: right;
+      }
+
+      .sync-row .btn {
+        font-size: 13px;
+        padding: 5px 10px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      /* кнопки удаления прижаты к правому краю тулбара */
+      #btnDeleteOne {
+        margin-left: auto;
+      }
+
+      .btn {
+        padding: 8px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        border-color: var(--accent);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn.danger {
+        color: var(--danger);
+      }
+      .btn.danger:hover {
+        border-color: var(--danger);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      #netStatus {
+        /* span по умолчанию inline - margin-top по нему не работает */
+        display: block;
+        margin-top: 4px;
+      }
+
+      /* display: block у #netStatus перебивает display: none из атрибута
+         hidden (у селектора по ID специфичность выше, чем у [hidden] в
+         стилях браузера), поэтому скрытие прописываем явно */
+      #netStatus[hidden] {
+        display: none;
+      }
+
+      /* кнопка сохранения списка — под таблицей, слева */
+      .save-row {
+        margin-top: 12px;
+        text-align: left;
+      }
+      .save-row .btn {
+        min-width: 120px;
+      }
+
+      /* панель NTP-настроек */
+      .ntp-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin: 20px 0 0;
+      }
+      .ntp-panel h2 {
+        font-size: 16px;
+        margin: 0 0 12px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        max-width: 400px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        /* min-width: 460px; */
+      }
+
+      th,
+      td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+      }
+
+      thead th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--muted);
+        background: #fafbfc;
+        white-space: nowrap;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+      tbody tr.selected {
+        background: var(--selected);
+      }
+      tbody tr.disabled td {
+        color: var(--muted);
+      }
+      tbody tr.disabled .relay-badge {
+        opacity: 0.4;
+      }
+
+      .col-status,
+      .col-actions {
+        width: 1%;
+        text-align: center;
+      }
+      .col-time,
+      .col-relay {
+        white-space: nowrap;
+        text-align: center;
+      }
+      .col-period {
+        text-align: center;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      input[type="checkbox"]:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      input[type="text"]:disabled,
+      input[type="number"]:disabled {
+        opacity: 0.4;
+        cursor: default;
+        background: #f5f5f5;
+      }
+
+      /* чек-бокс в заголовке: включить / выключить все задачи разом */
+      thead .col-status input {
+        width: 16px;
+        height: 16px;
+        margin-right: 5px;
+      }
+
+      /* знак статуса реле в столбце "Действие": ✓ вкл / ✗ выкл */
+      .relay-badge {
+        font-size: 14px;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+      .relay-badge.on {
+        color: #15803d;
+      }
+      .relay-badge.off {
+        color: #b91c1c;
+      }
+
+      .edit-btn {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--panel);
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .edit-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .empty {
+        padding: 18px;
+        text-align: center;
+        color: var(--muted);
+        background: var(--panel);
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+        margin-top: 12px;
+      }
+
+      /* модальное окно редактирования */
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.45);
+        padding: 16px;
+      }
+
+      .modal.hidden {
+        display: none;
+      }
+
+      .dialog {
+        background: var(--panel);
+        border-radius: 10px;
+        padding: 18px;
+        width: 100%;
+        max-width: 420px;
+      }
+      .dialog h2 {
+        font-size: 17px;
+        margin: 0 0 14px;
+      }
+
+      .field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .field label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .field input[type="time"],
+      .field input[type="number"],
+      .field input[type="text"],
+      .field select {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
+      }
+
+      /* NTP-сервер: поле занимает всю ширину */
+      .field:has(input[type="text"]) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+      }
+      .field:has(input[type="text"]) input {
+        width: 100%;
+      }
+
+      /* вся строка NTP сервера затемняется, когда поле недоступно */
+      .ntp-panel .field:has(input:disabled) {
+        opacity: 0.5;
+      }
+
+      /* подсветка строки "Действие с реле": зелёная - Включить, красная - Выключить */
+      .field.relay-on,
+      .field.relay-off {
+        padding: 6px 10px;
+        border-radius: 6px;
+      }
+      .field.relay-on {
+        background: #dcfce7;
+      }
+      .field.relay-off {
+        background: #fee2e2;
+      }
+      .field.relay-on select {
+        color: #15803d;
+        border-color: #86efac;
+      }
+      .field.relay-off select {
+        color: #b91c1c;
+        border-color: #fca5a5;
+      }
+
+      .days {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin: 0 0 12px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .days.hidden {
+        display: none;
+      }
+      .days span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 13px;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="main">
+      <h1>Планировщик задач</h1>
+
+      <!-- ======================== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ======================== -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tasks">Список задач</button>
+        <button class="tab-btn" data-tab="settings">Настройки времени</button>
+      </div>
+
+      <!-- ======================== ВКЛАДКА 1: СПИСОК ЗАДАЧ ======================== -->
+      <div class="tab-content active" id="tab-tasks">
+        <div class="toolbar">
+          <button id="btnAdd" class="btn primary" title="Добавить задачу">
+            +
+          </button>
+          <button id="btnDeleteOne" class="btn danger" title="Удалить задачу">
+            🗑
+          </button>
+          <button id="btnDeleteAll" class="btn danger" disabled>
+            Очистить список
+          </button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-status">
+                  <input
+                    type="checkbox"
+                    id="chkAll"
+                    title="Включить или выключить все задачи"
+                    aria-label="Включить или выключить все задачи"
+                  />
+                </th>
+                <th class="col-time" title="Задачи отсортированы по времени">
+                  🕐
+                </th>
+                <th class="col-relay">Действие</th>
+                <th class="col-period">🗘</th>
+                <th class="col-actions">🖋</th>
+              </tr>
+            </thead>
+            <tbody id="tasksBody"></tbody>
+          </table>
+        </div>
+
+        <p class="empty" id="emptyNotice">Список задач пуст.</p>
+        <span class="hint" id="netStatus"></span>
+      </div>
+
+      <!-- ======================== ВКЛАДКА 2: НАСТРОЙКИ ВРЕМЕНИ ======================== -->
+      <div class="tab-content" id="tab-settings">
+        <div class="time-bar">
+          <div class="clock" id="clock"></div>
+          <div class="clock" id="deviceClock"></div>
+          <div class="field">
+            <label for="fTz">Часовой пояс модуля</label>
+            <select id="fTz"></select>
+          </div>
+          <div class="sync-row">
+            <button id="btnSyncTime" class="btn primary">
+              Синхронизировать время модуля
+            </button>
+          </div>
+        </div>
+
+        <div class="ntp-panel">
+          <h2>NTP синхронизация</h2>
+
+          <div class="field">
+            <label for="chkNtp">Синхронизировать время через NTP</label>
+            <input type="checkbox" id="chkNtp" />
+          </div>
+
+          <div class="field">
+            <label for="fNtp1">NTP сервер 1</label>
+            <input type="text" id="fNtp1" placeholder="pool.ntp.org" />
+          </div>
+
+          <div class="field">
+            <label for="fNtp2">NTP сервер 2</label>
+            <input type="text" id="fNtp2" placeholder="pool.ntp.org" />
+          </div>
+
+          <div class="field">
+            <label for="fNtp3">NTP сервер 3</label>
+            <input type="text" id="fNtp3" placeholder="pool.ntp.org" />
+          </div>
+        </div>
+      </div>
+
+      <div class="save-row">
+        <button
+          class="btn"
+          style="margin-right: 10px"
+          onclick="window.open('/', '_self', false)"
+        >
+          Назад
+        </button>
+        <button id="btnCommit" class="btn primary" disabled>Сохранить</button>
+      </div>
+    </div>
+
+    <!-- форма добавления / редактирования shed_task -->
+    <div class="modal hidden" id="modal">
+      <div class="dialog">
+        <h2 id="dialogTitle">Новая задача</h2>
+
+        <div class="field">
+          <label for="fStatus">Задача активна</label>
+          <input type="checkbox" id="fStatus" checked />
+        </div>
+
+        <div class="field">
+          <label for="fTime">Время срабатывания</label>
+          <input type="time" id="fTime" value="07:00" step="60" />
+        </div>
+
+        <div class="field">
+          <label for="fIndex">Реле</label>
+          <select id="fIndex"></select>
+        </div>
+
+        <div class="field">
+          <label for="fRelayStatus">Действие с реле</label>
+          <select id="fRelayStatus">
+            <option value="1">Включить</option>
+            <option value="0">Выключить</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="fPeriod">Повтор</label>
+          <select id="fPeriod">
+            <option value="0">Однократно</option>
+            <option value="128">Ежедневно</option>
+            <option value="days">По дням недели</option>
+          </select>
+        </div>
+
+        <div class="days hidden" id="fDays"></div>
+
+        <div class="dialog-actions">
+          <button class="btn" id="btnCancel">Отмена</button>
+          <button class="btn primary" id="btnSave">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /*
+  Формат JSON (соответствует task_data из temp.ino):
+  {
+    "t_list": [
+      {"state":1, "time":420, "rel":0, "act":1, "rep":0},
+      ...
+    ],
+    "r_list": ["socket_1", "socket_2", ...],
+    "tmax": 32
+  }
+  Маппинг полей:
+    state     - bool  (0/1)  → task_status
+    time      - uint32  мин  → time
+    rel       - uint8 (число) → index реле
+    act       - bool  (0/1)  → action_for_relay
+    rep       - uint8      → periodicity (битовая маска дней недели)
+  r_list  - список имён реле (отдаётся модулем, на модуль не отправляется)
+  tmax    - предельное число задач (отдаётся модулем, на модуль не отправляется);
+            у esp8266 память меньше, чем у esp32, поэтому лимит задаёт прошивка
+
+  Формат времени (TIME_URL):
+  { "unix": <секунды>, "ms": <миллисекунды>, "tz": <смещение пояса, сек> }
+    unix, ms - время; tz - смещение пояса, восток положительный (МСК = 10800).
+    Если модуль отвечает без tz, unix трактуется как UTC.
+    Если tz есть, unix трактуется как локальное время пояса tz
+    и приводится к UTC вычитанием смещения.
+
+  Формат NTP (NTP_URL):
+  { "ntp_enabled": <0/1>, "ntp_server1": "...", "ntp_server2": "...", "ntp_server3": "...", "tz": <сек> }
+    ntp_enabled - включена ли NTP синхронизация;
+    ntp_server1/2/3 - адреса NTP серверов (по 3 сервера для резервирования);
+    tz - смещение часового пояса в секундах, восток положительный (МСК = 10800);
+    сохраняется в ntp.json вместе с остальными настройками.
+*/
+      "use strict";
+
+      /*
+  ======================== НАСТРОЙКИ ========================
+  Относительные URL — работают при отдаче страницы самим
+  модулем ESP32 (http://ip/ → http://ip/tasks).
+  При открытии файла в браузере без модуля fetch вернёт
+  ошибку, и в ui появится строка статуса.
+  */
+      const DATA_URL = "/tasks_get"; // GET  → JSON-строка списка задач
+      const SAVE_URL = "/tasks_set"; // POST → новый список задач
+      const TIME_URL = "/time"; // GET → время модуля, POST → установка (unix, ms, tz)
+      // как трактовать unix от модуля: false - это UTC, tz только для справки;
+      // true - это локальное время пояса tz, для UTC вычитаем смещение
+      const DEVICE_TIME_IS_LOCAL = false;
+      let MAX_TASKS = 32; // дефолт; перезаписывается из tmax при загрузке списка задач
+
+      const TR_ONCE = 0x00,
+        TR_DAILY = 0x80;
+      const DAY_BITS = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40];
+      // маска всех дней недели (0x7F)
+      const ALL_DAYS = DAY_BITS.reduce((mask, bit) => mask | bit, 0);
+      const DAY_NAMES = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+      // порядок НЕ совпадает с Date.getDay(): здесь 0 - понедельник ... 6 -
+      // воскресенье, как и биты task_repeat в прошивке (TR_MON_DAY = 0x01)
+      const DAY_FULL = [
+        "воскресенье",
+        "понедельник",
+        "вторник",
+        "среда",
+        "четверг",
+        "пятница",
+        "суббота",
+      ];
+
+      /*
+  ======================== СОСТОЯНИЕ ========================
+  */
+      let tasks = []; // массив {id, state, time, rel, act, rep}
+      let relayNames = []; // r_list из JSON
+      let selectedId = null;
+      let editingId = null;
+      let dirty = false;
+      // разница между временем модуля и локальным (миллисекунды);
+      // null = время модуля ещё не загружено
+      let deviceTimeOffset = null;
+
+      const tasksBody = document.getElementById("tasksBody");
+      const chkAll = document.getElementById("chkAll");
+      const emptyNotice = document.getElementById("emptyNotice");
+      const netStatus = document.getElementById("netStatus");
+      const btnDeleteOne = document.getElementById("btnDeleteOne");
+      const btnDeleteAll = document.getElementById("btnDeleteAll");
+      const btnCommit = document.getElementById("btnCommit");
+      const btnSyncTime = document.getElementById("btnSyncTime");
+      const clock = document.getElementById("clock");
+      const deviceClock = document.getElementById("deviceClock");
+      const modal = document.getElementById("modal");
+      const dialogTitle = document.getElementById("dialogTitle");
+      const fStatus = document.getElementById("fStatus");
+      const fTime = document.getElementById("fTime");
+      const fIndex = document.getElementById("fIndex");
+      const fRelayStatus = document.getElementById("fRelayStatus");
+      const fPeriod = document.getElementById("fPeriod");
+      const fDays = document.getElementById("fDays");
+
+      // чек-боксы дней недели формируются из mask-значений task_periodicity
+      DAY_BITS.forEach((bit, i) => {
+        const label = document.createElement("span");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.value = bit;
+        box.id = "day" + bit;
+        label.append(box, document.createTextNode(DAY_NAMES[i]));
+        fDays.append(label);
+      });
+
+      /*
+  ======================== ПАРСЕР JSON ========================
+  Формат соответствует task_data из temp.ino.
+  */
+      function parseTaskData(text) {
+        const obj = JSON.parse(text);
+        return {
+          tList: Array.isArray(obj.t_list) ? obj.t_list : [],
+          rList: Array.isArray(obj.r_list) ? obj.r_list : [],
+          tmax: Number(obj.tmax),
+        };
+      }
+
+      // Применить распарсенные данные к внутренним массивам
+      function applyTaskData({ tList, rList, tmax }) {
+        // лимит задач задаёт прошивка: у esp8266 память меньше, чем у esp32.
+        // Если tmax не пришёл (Number -> NaN), оставляем прежний лимит
+        if (Number.isFinite(tmax) && tmax > 0) MAX_TASKS = Math.floor(tmax);
+        tasks = tList.map((t, i) => ({
+          id: i + 1,
+          state: !!t.state,
+          time: Number(t.time) || 0,
+          rel: String(t.rel),
+          act: !!t.act,
+          rep: Number(t.rep) || 0,
+        }));
+        relayNames = Array.isArray(rList) ? rList : [];
+      }
+
+      /*
+  ======================== ЗАГРУЗКА ========================
+  */
+      async function loadTasks() {
+        try {
+          const res = await fetch(DATA_URL, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          applyTaskData(parseTaskData(await res.text()));
+          dirty = false; // список соответствует состоянию модуля
+        } catch (e) {
+          // netStatus теперь показывает только количество задач, поэтому
+          // ошибку загрузки выводим всплывающим окном
+          alert("Не удалось загрузить список задач: " + e.message);
+        }
+        render();
+      }
+
+      /*
+  ======================== NTP НАСТРОЙКИ ========================
+  */
+      const NTP_URL = "/ntp"; // GET → настройки NTP, POST → сохранение
+      const chkNtp = document.getElementById("chkNtp");
+      const fNtp1 = document.getElementById("fNtp1");
+      const fNtp2 = document.getElementById("fNtp2");
+      const fNtp3 = document.getElementById("fNtp3");
+      // смещение пояса модуля хранится в ntp.json, приходит в GET /ntp (tz)
+      // и уходит в POST /ntp - управляем им через select в блоке времени
+      const fTz = document.getElementById("fTz");
+
+      // шкала поясов: все существующие смещения кратны 15 минутам,
+      // диапазон -12..+14 часов - как контроль в set_time_zone_offset()
+      const TZ_STEP = 900;
+      const TZ_MIN = -12 * 3600;
+      const TZ_MAX = 14 * 3600;
+
+      for (let s = TZ_MIN; s <= TZ_MAX; s += TZ_STEP) {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = tzLabel(s);
+        fTz.append(opt);
+      }
+
+      // выставить select на смещение в секундах, округлив до шага шкалы
+      function setTzSelect(sec) {
+        if (!Number.isFinite(sec)) sec = 0;
+        sec = Math.round(sec / TZ_STEP) * TZ_STEP;
+        sec = Math.min(TZ_MAX, Math.max(TZ_MIN, sec));
+        fTz.value = String(sec);
+      }
+
+      // смена пояса перекрашивает строку "Время модуля" сразу, до сохранения
+      fTz.addEventListener("change", () => {
+        markNtpDirty();
+        renderClock();
+      });
+      // до загрузки с модуля показываем пояс браузера
+      setTzSelect(tzOffsetSec());
+
+      let ntpDirty = false; // есть несохранённые изменения NTP настроек
+
+      // единый источник правды для кнопки "Сохранить": она активна, пока
+      // есть несохранённые изменения в любой из групп - список задач (dirty)
+      // или настройки NTP (ntpDirty)
+      function syncCommitButton() {
+        btnCommit.disabled = !(dirty || ntpDirty);
+      }
+
+      // блокировка полей при выключенном NTP
+      function syncNtpFields() {
+        const on = chkNtp.checked;
+        fNtp1.disabled = !on;
+        fNtp2.disabled = !on;
+        fNtp3.disabled = !on;
+      }
+
+      function markNtpDirty() {
+        ntpDirty = true;
+        syncCommitButton();
+      }
+
+      chkNtp.addEventListener("change", () => {
+        syncNtpFields();
+        markNtpDirty();
+      });
+      [fNtp1, fNtp2, fNtp3].forEach((f) =>
+        f.addEventListener("input", markNtpDirty),
+      );
+      syncNtpFields();
+      syncCommitButton();
+
+      // загрузка NTP настроек с модуля
+      async function loadNtpSettings() {
+        try {
+          const res = await fetch(NTP_URL, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const data = JSON.parse(await res.text());
+          chkNtp.checked = !!data.ntp_enabled;
+          fNtp1.value = data.ntp_server1 || "";
+          fNtp2.value = data.ntp_server2 || "";
+          fNtp3.value = data.ntp_server3 || "";
+          // если модуль не вернул tz - оставляем пояс браузера
+          const tzFromDevice = Number(data.tz);
+          setTzSelect(Number.isFinite(tzFromDevice) ? tzFromDevice : tzOffsetSec());
+          ntpDirty = false;
+        } catch (e) {}
+        // модуль без NTP-настроек отвечает ошибкой: поля остаются пустыми
+        // и заблокированными - это штатный режим, не ошибка
+        syncNtpFields();
+        syncCommitButton();
+        // пояс мог измениться - перерисовываем строку времени модуля
+        renderClock();
+      }
+
+      /*
+  ======================== СОХРАНЕНИЕ ========================
+  Обе функции только отправляют свои данные и сбрасывают флаг грязноты.
+  Ответ модуля (страница с <meta refresh>) в DOM не вставляется: вставленный
+  через innerHTML meta-refresh браузером не исполняется. Навигацией на
+  стартовую страницу управляет обработчик кнопки "Сохранить".
+  */
+      async function postTasks() {
+        sortTasks();
+        const body = JSON.stringify({
+          t_list: tasks.map((t) => ({
+            state: t.state ? 1 : 0,
+            time: t.time,
+            rel: Number(t.rel),
+            act: t.act ? 1 : 0,
+            rep: t.rep,
+          })),
+        });
+        const res = await fetch(SAVE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        dirty = false; // список записан в модуль
+      }
+
+      async function postNtp() {
+        const body = JSON.stringify({
+          ntp_enabled: chkNtp.checked ? 1 : 0,
+          ntp_server1: fNtp1.value.trim(),
+          ntp_server2: fNtp2.value.trim(),
+          ntp_server3: fNtp3.value.trim(),
+          tz: Number(fTz.value),
+        });
+        const res = await fetch(NTP_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        ntpDirty = false; // настройки записаны в модуль
+      }
+
+      /*
+  ======================== УТИЛИТЫ ========================
+  */
+      function setStatus(msg) {
+        if (netStatus) netStatus.textContent = msg;
+      }
+
+      // изменения есть, но ещё не отправлены на модуль
+      function markDirty() {
+        dirty = true;
+        syncCommitButton();
+      }
+
+      function timeToText(minutes) {
+        const h = String(Math.floor(minutes / 60) % 24).padStart(2, "0");
+        const m = String(minutes % 60).padStart(2, "0");
+        return h + ":" + m;
+      }
+
+      function relayName(index) {
+        const n = Number(index);
+        return relayNames[n] !== undefined ? relayNames[n] : "реле " + n;
+      }
+
+      // смещение локального пояса в секундах, восток - положительное (МСК = 10800)
+      function tzOffsetSec() {
+        return -new Date().getTimezoneOffset() * 60;
+      }
+
+      // "UTC+03:00" для подписи в строке статуса
+      function tzLabel(sec) {
+        const abs = Math.abs(sec);
+        return (
+          "UTC" +
+          (sec < 0 ? "-" : "+") +
+          String(Math.floor(abs / 3600)).padStart(2, "0") +
+          ":" +
+          String(Math.floor((abs % 3600) / 60)).padStart(2, "0")
+        );
+      }
+
+      // строка "метка · ЧЧ:ММ:СС · день недели, дата"
+      // tzSec - смещение пояса, в котором показываем время; локальные геттеры
+      // Date (getHours и т.п.) всегда используют пояс браузера, поэтому
+      // сдвигаем epoch на смещение и читаем UTC-геттеры
+      function formatClockParts(ms, tzSec) {
+        const now = new Date(ms + (Number(tzSec) || 0) * 1000);
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+          pad(now.getUTCHours()) +
+          ":" +
+          pad(now.getUTCMinutes()) +
+          ":" +
+          pad(now.getUTCSeconds()) +
+          " · " +
+          DAY_FULL[now.getUTCDay()] +
+          ", " +
+          pad(now.getUTCDate()) +
+          "." +
+          pad(now.getUTCMonth() + 1) +
+          "." +
+          pad(now.getUTCFullYear())
+        );
+      }
+
+      // метка в отдельном span (стиль .clock-label), время — во втором;
+      // обновляем только textContent второго span, DOM строится один раз
+      function initClockLine(el, label) {
+        const l = document.createElement("span");
+        l.className = "clock-label";
+        l.textContent = label;
+        const t = document.createElement("span");
+        el.append(l, t);
+        return t;
+      }
+      const clockTimeEl = initClockLine(clock, "Локальное время:");
+      const deviceTimeEl = initClockLine(deviceClock, "Время модуля:");
+
+      function renderClock() {
+        // локальное время - в поясе браузера
+        clockTimeEl.textContent = formatClockParts(Date.now(), tzOffsetSec());
+        if (deviceTimeOffset === null) {
+          deviceTimeEl.textContent = "нет данных";
+          deviceClock.classList.add("unsynced");
+        } else {
+          deviceClock.classList.remove("unsynced");
+          // часы модуля хранят UTC (configTzTime("UTC", ...)), поэтому
+          // смещение берём из select - так видно, какой пояс выбран
+          deviceTimeEl.textContent = formatClockParts(
+            Date.now() + deviceTimeOffset,
+            Number(fTz.value),
+          );
+        }
+      }
+
+      // таймер выравнивается по границе секунды
+      function tickClock() {
+        renderClock();
+        setTimeout(tickClock, 1005 - (Date.now() % 1000));
+      }
+
+      function periodToText(p) {
+        if (p === TR_ONCE) return "Однократно";
+        if (p & TR_DAILY) return "Ежедневно";
+        const names = DAY_NAMES.filter((n, i) => p & DAY_BITS[i]);
+        return names.length ? names.join(", ") : "Однократно";
+      }
+
+      // строки всегда упорядочены по времени срабатывания;
+      // при одинаковом времени — по реле, затем по id
+      function sortTasks() {
+        tasks.sort(
+          (a, b) =>
+            a.time - b.time || Number(a.rel) - Number(b.rel) || a.id - b.id,
+        );
+      }
+
+      // человекочитаемое описание задачи для сообщений
+      function taskText(task) {
+        return (
+          timeToText(task.time) +
+          " · " +
+          relayName(task.rel) +
+          ": " +
+          (task.act ? "включить" : "выключить") +
+          " · " +
+          periodToText(task.rep)
+        );
+      }
+
+      // поиск задачи-дубля: совпадают время, реле, действие с реле и повтор;
+      // статус (state) в сравнении не участвует - дублем считается и
+      // выключенная задача. exceptId исключает из сравнения саму
+      // редактируемую задачу (при добавлении новой передаём null)
+      function findDuplicate(draft, exceptId) {
+        return tasks.find(
+          (t) =>
+            t.id !== exceptId &&
+            t.time === draft.time &&
+            Number(t.rel) === Number(draft.rel) &&
+            t.act === draft.act &&
+            t.rep === draft.rep,
+        );
+      }
+
+      /*
+  ======================== РЕНДЕР ========================
+  */
+      function render() {
+        tasksBody.textContent = "";
+        sortTasks();
+
+        tasks.forEach((task) => {
+          const tr = document.createElement("tr");
+          tr.dataset.id = task.id;
+          if (task.id === selectedId) tr.classList.add("selected");
+          if (!task.state) tr.classList.add("disabled");
+
+          // 1-я ячейка - чек-бокс статуса задачи
+          const tdStatus = document.createElement("td");
+          tdStatus.className = "col-status";
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = !!task.state;
+          box.title = "Статус задачи";
+          box.dataset.role = "status";
+          tdStatus.append(box);
+
+          const tdTime = document.createElement("td");
+          tdTime.className = "col-time";
+          tdTime.textContent = timeToText(task.time);
+
+          const tdRelay = document.createElement("td");
+          tdRelay.className = "col-relay";
+          // в столбце показываем имя реле из r_list; сам индекс (task.rel)
+          // остаётся в данных и уходит на модуль при сохранении
+          tdRelay.textContent = relayName(task.rel) + ": ";
+          const badge = document.createElement("span");
+          badge.className = "relay-badge " + (task.act ? "on" : "off");
+          badge.textContent = task.act ? "✓" : "✗";
+          badge.title = task.act ? "включить" : "выключить";
+          tdRelay.append(badge);
+
+          const tdPeriod = document.createElement("td");
+          tdPeriod.className = "col-period";
+          tdPeriod.textContent = periodToText(task.rep);
+
+          // последняя ячейка - кнопка редактирования задачи
+          const tdEdit = document.createElement("td");
+          tdEdit.className = "col-actions";
+          const edit = document.createElement("button");
+          edit.className = "edit-btn";
+          edit.textContent = "🖋";
+          edit.title = "Редактировать задачу";
+          edit.dataset.role = "edit";
+          tdEdit.append(edit);
+
+          tr.append(tdStatus, tdTime, tdRelay, tdPeriod, tdEdit);
+          tasksBody.append(tr);
+        });
+
+        emptyNotice.hidden = tasks.length > 0;
+        netStatus.hidden = !emptyNotice.hidden;
+        btnDeleteOne.disabled = selectedId === null;
+        btnDeleteAll.disabled = tasks.length === 0;
+        btnAdd.disabled = tasks.length >= MAX_TASKS;
+        syncCommitButton();
+
+        // чек-бокс в заголовке: отмечен, когда активны все задачи,
+        // в неопределённом состоянии - когда активна часть, отключён при пустом списке
+        const activeCount = tasks.reduce((n, t) => n + (t.state ? 1 : 0), 0);
+        chkAll.checked = tasks.length > 0 && activeCount === tasks.length;
+        chkAll.indeterminate = activeCount > 0 && activeCount < tasks.length;
+        chkAll.disabled = tasks.length === 0;
+
+        tasks.length < MAX_TASKS
+          ? setStatus("Всего задач в списке: " + tasks.length)
+          : setStatus("Достигнут лимит на количество задач: " + tasks.length);
+      }
+
+      /*
+  ======================== СОХРАНЕНИЕ ПО КЛИКУ ========================
+  Последовательно отправляет NTP-настройки и список задач. При ошибке в
+  любой из групп — показывает alert и остаётся на странице; кнопка
+  "Сохранить" останется активной, чтобы можно было повторить отправку.
+  Если всё сохранилось — сразу идёт на стартовую страницу модуля.
+  */
+      btnCommit.addEventListener("click", async () => {
+        if (!dirty && !ntpDirty) return;
+        btnCommit.disabled = true; // на время отправки
+        const errors = [];
+        if (ntpDirty) {
+          try {
+            await postNtp();
+          } catch (e) {
+            errors.push("NTP: " + e.message);
+          }
+        }
+        if (dirty) {
+          try {
+            await postTasks();
+          } catch (e) {
+            errors.push("список задач: " + e.message);
+          }
+        }
+        if (errors.length) {
+          alert("Не сохранено: " + errors.join("; "));
+          syncCommitButton(); // вернём кнопку, если остались грязные изменения
+          return;
+        }
+        // обе группы сохранились — на стартовую страницу модуля
+        location.replace("/");
+      });
+
+      /*
+  ======================== ОБРАБОТЧИКИ ========================
+  */
+      // чек-бокс в заголовке столбца "Статус" - включить или выключить сразу все задачи
+      chkAll.addEventListener("change", () => {
+        const on = chkAll.checked;
+        tasks.forEach((t) => {
+          t.state = on;
+        });
+        markDirty();
+        render();
+      });
+
+      tasksBody.addEventListener("change", (ev) => {
+        const box = ev.target;
+        if (box.dataset.role !== "status") return;
+        const task = tasks.find(
+          (t) => t.id === Number(box.closest("tr").dataset.id),
+        );
+        if (!task) return;
+        task.state = box.checked;
+        markDirty();
+        render();
+      });
+
+      tasksBody.addEventListener("click", (ev) => {
+        const tr = ev.target.closest("tr");
+        if (!tr) return;
+        const id = Number(tr.dataset.id);
+
+        if (ev.target.dataset.role === "edit") {
+          // кнопка редактирования в последней ячейке
+          openDialog(tasks.find((t) => t.id === id));
+          return;
+        }
+        if (ev.target.dataset.role === "status") return;
+
+        selectedId = selectedId === id ? null : id;
+        render();
+      });
+
+      document.getElementById("btnAdd").addEventListener("click", () => {
+        if (tasks.length >= MAX_TASKS) {
+          alert("Достигнут лимит на добавление задач: " + MAX_TASKS);
+          return;
+        }
+        openDialog(null);
+      });
+
+      btnDeleteOne.addEventListener("click", () => {
+        const selected = tasks.find((t) => t.id === selectedId);
+        if (!selected) return;
+        if (!confirm("Удалить задачу на " + timeToText(selected.time) + "?"))
+          return;
+        tasks = tasks.filter((t) => t.id !== selectedId);
+        selectedId = null;
+        markDirty();
+        render();
+      });
+
+      btnDeleteAll.addEventListener("click", () => {
+        if (!tasks.length) return;
+        if (!confirm("Удалить все задачи из списка (" + tasks.length + ")?"))
+          return;
+        tasks = [];
+        selectedId = null;
+        markDirty();
+        render();
+      });
+
+      function openDialog(task) {
+        editingId = task ? task.id : null;
+        dialogTitle.textContent = task
+          ? "Редактирование задачи на " + timeToText(task.time)
+          : "Новая задача";
+
+        fStatus.checked = task ? !!task.state : true;
+        fTime.value = timeToText(task ? task.time : 7 * 60);
+        // заполняем select реле из r_list
+        fIndex.textContent = "";
+        relayNames.forEach((name, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = name;
+          fIndex.append(opt);
+        });
+        // если реле задачи нет в списке (добавились новые) — создаём опцию
+        const curRel = task ? String(task.rel) : "0";
+        if (
+          curRel !== "0" &&
+          !fIndex.querySelector(`option[value="${curRel}"]`)
+        ) {
+          const opt = document.createElement("option");
+          opt.value = curRel;
+          opt.textContent = "реле " + curRel;
+          fIndex.append(opt);
+        }
+        fIndex.value = curRel; // для новой задачи это "0"
+        fRelayStatus.value = task ? (task.act ? "1" : "0") : "1";
+        syncRelayRow();
+
+        const p = task ? task.rep : TR_DAILY;
+        const byDays = p !== TR_ONCE && !(p & TR_DAILY);
+        fPeriod.value =
+          p === TR_ONCE ? String(TR_ONCE) : byDays ? "days" : String(TR_DAILY);
+        fDays.classList.toggle("hidden", !byDays);
+        fDays.querySelectorAll("input").forEach((box) => {
+          box.checked = byDays && (p & Number(box.value)) !== 0;
+        });
+
+        modal.classList.remove("hidden");
+      }
+
+      fPeriod.addEventListener("change", () => {
+        fDays.classList.toggle("hidden", fPeriod.value !== "days");
+      });
+
+      // подсветка строки "Статус реле" следует за выбранным значением селекта
+      const fRelayField = fRelayStatus.closest(".field");
+      function syncRelayRow() {
+        const on = fRelayStatus.value === "1";
+        fRelayField.classList.toggle("relay-on", on);
+        fRelayField.classList.toggle("relay-off", !on);
+      }
+      fRelayStatus.addEventListener("change", syncRelayRow);
+
+      document
+        .getElementById("btnCancel")
+        .addEventListener("click", closeModal);
+
+      modal.addEventListener("click", (ev) => {
+        if (ev.target === modal) closeModal();
+      });
+
+      function closeModal() {
+        modal.classList.add("hidden");
+      }
+
+      document.getElementById("btnSave").addEventListener("click", () => {
+        const [h, m] = fTime.value.split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) {
+          alert("Укажите время срабатывания");
+          return;
+        }
+
+        let rep;
+        if (fPeriod.value === "days") {
+          rep = [...fDays.querySelectorAll("input:checked")].reduce(
+            (mask, b) => mask | Number(b.value),
+            0,
+          );
+          if (rep === 0) {
+            alert("Выберите хотя бы один день недели");
+            return;
+          }
+          // выбраны все дни недели - сохраняем как ежедневный повтор
+          if (rep === ALL_DAYS) rep = TR_DAILY;
+        } else {
+          rep = Number(fPeriod.value);
+        }
+
+        const draft = {
+          state: fStatus.checked,
+          time: Math.min(1439, Math.max(0, h * 60 + m)),
+          rel: String(fIndex.value), // select отдаёт индекс реле из r_list
+          act: fRelayStatus.value === "1",
+          rep: rep,
+        };
+
+        if (editingId === null) {
+          // такая задача уже есть в списке - новую не добавляем,
+          // а приводим статус существующей к статусу добавляемой.
+          // проверка до проверки лимита: дубль не увеличивает список,
+          // поэтому "максимум задач" при совпадении не нужен
+          const dup = findDuplicate(draft, null);
+          if (dup) {
+            if (dup.state === draft.state) {
+              alert("Такая задача уже есть в списке:\n" + taskText(dup));
+            } else {
+              dup.state = draft.state;
+              markDirty();
+              alert(
+                "Такая задача уже есть в списке:\n" +
+                  taskText(dup) +
+                  "\nСтатус обновлён: " +
+                  (draft.state ? "активна" : "выключена"),
+              );
+            }
+            closeModal();
+            render();
+            return;
+          }
+          if (tasks.length >= MAX_TASKS) {
+            alert("Максимум задач: " + MAX_TASKS);
+            return;
+          }
+          const nextId = tasks.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+          tasks.push(Object.assign({ id: nextId }, draft));
+        } else {
+          // при редактировании дубль тоже недопустим: сравниваем со всеми
+          // задачами кроме редактируемой; правку отменяем - модалку
+          // оставляем открытой, чтобы можно было поменять параметры
+          const dup = findDuplicate(draft, editingId);
+          if (dup) {
+            alert(
+              "Такая задача уже есть в списке:\n" +
+                taskText(dup) +
+                "\nИзменения не применены.",
+            );
+            return;
+          }
+          Object.assign(
+            tasks.find((t) => t.id === editingId),
+            draft,
+          );
+        }
+
+        markDirty();
+        closeModal();
+        render();
+      });
+
+      /*
+  ======================== ВРЕМЯ МОДУЛЯ ========================
+  */
+      // читаем время модуля и запоминаем смещение относительно локального
+      async function loadDeviceTime() {
+        try {
+          const res = await fetch(TIME_URL, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const data = JSON.parse(await res.text());
+          // модуль без установленных часов отвечает unix ≈ 0 (1970 год);
+          // ниже этого порога считаем время модуля недоступным
+          const MIN_UNIX_SEC = 1_000_000_000; // 2001-09-09
+          const unix = Number(data.unix);
+          if (!Number.isFinite(unix) || unix < MIN_UNIX_SEC) {
+            throw new Error("часы модуля не установлены");
+          }
+          const unixMs = unix * 1000 + (Number(data.ms) || 0);
+          // смещение отдаёт модуль: unix в локальном времени пояса (local/tz) - переводим в UTC
+          const tz = Number(data.tz);
+          const isLocal = DEVICE_TIME_IS_LOCAL || data.local === 1;
+          const utcMs =
+            isLocal && Number.isFinite(tz) ? unixMs - tz * 1000 : unixMs;
+          // offset = время модуля - локальное, замеряем после ответа сети
+          deviceTimeOffset = utcMs - Date.now();
+          renderClock();
+        } catch (e) {
+          deviceTimeOffset = null;
+          renderClock();
+        }
+      }
+
+      // отправляем локальное время и выбранный пояс на модуль
+      async function syncDeviceTime() {
+        const local = new Date();
+        const body = JSON.stringify({
+          unix: Math.floor(local.getTime() / 1000),
+          ms: local.getMilliseconds(),
+          tz: Number(fTz.value),
+        });
+        btnSyncTime.disabled = true;
+        try {
+          const res = await fetch(TIME_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+        } catch (e) {
+        } finally {
+          btnSyncTime.disabled = false;
+          // перечитываем — модуль мог сохранить с задержкой или не поддержать установку
+          await loadDeviceTime();
+        }
+      }
+
+      btnSyncTime.addEventListener("click", syncDeviceTime);
+
+      /*
+  ======================== ВКЛАДКИ ========================
+  */
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.dataset.tab;
+          document.querySelectorAll(".tab-btn").forEach((b) => {
+            b.classList.toggle("active", b.dataset.tab === tab);
+          });
+          document.querySelectorAll(".tab-content").forEach((c) => {
+            c.classList.toggle("active", c.id === "tab-" + tab);
+          });
+        });
+      });
+
+      /*
+  ======================== ЗАПУСК ========================
+  */
+      async function boot() {
+        render();
+        tickClock();
+        await loadDeviceTime();
+        await loadTasks();
+        await loadNtpSettings();
+      }
+      boot();
+    </script>
+  </body>
+</html>

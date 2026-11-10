@@ -216,4 +216,8 @@ void srButton::setTimeoutOfLongClick(uint16_t new_timeout)
   _longclick_timeout = new_timeout;
 }
 
+void srButton::setTimeoutOfDebounce(uint16_t new_timeout)
+{
+  _debounce_timeout = new_timeout;
+}
 // ==== end srButton=================================

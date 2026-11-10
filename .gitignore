@@ -1,5 +1,2 @@
 .vscode/*
 _build/*
-*.html
-*.py
-*.sh
