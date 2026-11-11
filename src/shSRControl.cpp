@@ -11,12 +11,24 @@
 #include "extras/i_page.h"
 #include "extras/t_page.h"
 
-#define SR_PRINT(x)         \
-  if (logOnState && serial) \
-  serial->print(x)
-#define SR_PRINTLN(x)       \
-  if (logOnState && serial) \
-  serial->println(x)
+#ifdef SWITCH_RELAY_LOG_OFF
+
+#define SR_PRINT(x)
+#define SR_PRINTLN(x)
+
+#else
+
+#define SR_PRINT(x)           \
+  {                           \
+    if (logOnState && serial) \
+      serial->print(x);       \
+  }
+#define SR_PRINTLN(x)         \
+  {                           \
+    if (logOnState && serial) \
+      serial->println(x);     \
+  }
+#endif
 
 // ==== имена параметров в запросах/ответах ==========
 static const String sr_name_str = "name";
@@ -34,7 +46,6 @@ static const String sr_check_interval_str = "check_int";
 static const String sr_last_state_str = "last";
 static const String sr_ip_addr_str = "addr";
 static const String sr_wificonf_str = "wificonf";
-static const String sr_relayconf_str = "relconf";
 static const String sr_tasksconf_str = "tasksconf";
 static const String sr_save_state_str = "save_state";
 static const String sr_ntp_enabled_str = "ntp_enabled";
@@ -82,16 +93,15 @@ static const char TEXT_PLAIN[] PROGMEM = "text/plain";
 static const char TEXT_HTML[] PROGMEM = "text/html";
 static const char TEXT_JSON[] PROGMEM = "text/json";
 static const char APP_JSON[] PROGMEM = "application/json";
-static const char RELAY_GET_CONFIG[] PROGMEM = "/relay_getconfig";
-static const char SWITCH_GET_CONFIG[] PROGMEM = "/switch_getconfig";
+static const char RELAY_CONFIG_PAGE[] PROGMEM = "/config_page";
+static const char GET_RELAY_CONFIG[] PROGMEM = "/get_config";
 static const char GET_RELAY_LIST[] PROGMEM = "/get_relay_list";
 static const char SR_SET_CONFIG[] PROGMEM = "/sr_setconfig";
 static const char SR_RESTART[] PROGMEM = "/sr_restart";
-static const char RELAY_GET_STATE[] PROGMEM = "/relay_getstate";
+static const char GET_RELAY_STATE[] PROGMEM = "/relay_getstate";
 static const char RELAY_SWITCH[] PROGMEM = "/relay_switch";
 static const char REMOTE_RELAY_SWITCH[] PROGMEM = "/remote_switch";
-static const char TASK_LIST_GET[] PROGMEM = "/tasks_get";
-static const char TASK_LIST_SET[] PROGMEM = "/tasks_set";
+static const char SR_TASKS[] PROGMEM = "/sr_tasks";
 static const char TIME_DATA[] PROGMEM = "/time";
 static const char NTP_DATA[] PROGMEM = "/ntp";
 
@@ -138,8 +148,10 @@ static String module_description = "";
 static String module_name = "";
 static bool save_state_of_relay = false;
 
+#ifndef SWITCH_RELAY_LOG_OFF
 static Print *serial = NULL;
 static bool logOnState = true;
+#endif
 
 static shWebServer *http_server = NULL;
 static FS *file_system = NULL;
@@ -149,7 +161,6 @@ static uint16_t udpPort = DEFAULT_UDP_PORT;
 static shBuzzer bzr;
 
 static String wifi_config_page = "";
-static String relay_config_page = "";
 static String tasks_config_page = "";
 
 // ===================================================
@@ -187,7 +198,6 @@ static void clearListOfRemoteRelays();
 // ===================================================
 
 static void checkTasksList(srModuleType _mdl);
-static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
 static int8_t find_task(shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
 static bool del_task_in_list(uint8_t _idx);
@@ -216,12 +226,9 @@ static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModu
 static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl);
 
 // ===================================================
-static void handleGetConfigPage(String arg, String page);
-static void handleGetRelayConfigPage();
-static void handleGetSwitchConfigPage();
+static void handleGetConfigPage();
 
-static void handleGetRelayIndexPage();
-static void handleGetSwitchIndexPage();
+static void handleGetIndexPage();
 
 static void handleGetConfig(String _msg);
 static void handleGetRelayConfig();
@@ -296,14 +303,16 @@ void shRelayControl::init(uint8_t _relay_count)
     relayCount = _relay_count;
   }
 
+#ifndef SWITCH_RELAY_LOG_OFF
   if (Serial != NULL)
   {
     serial = &Serial;
   }
+#endif
 }
 
 bool shRelayControl::addRelay(const String &relay_name,
-                              uint8_t relay_pin,
+                              int8_t relay_pin,
                               uint8_t control_level,
                               int8_t relay_button_pin,
                               const String &relay_description)
@@ -313,7 +322,7 @@ bool shRelayControl::addRelay(const String &relay_name,
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      if (relayArray[i].relayName == "" && relayArray[i].relayPin >= 0)
+      if (relayArray[i].relayName == "" && relayArray[i].relayPin < 0)
       {
         relayArray[i] = shRelayData(relay_name,
                                     relay_pin,
@@ -341,6 +350,7 @@ uint16_t shRelayControl::getUdpPort()
   return (get_udp_port());
 }
 
+#ifndef SWITCH_RELAY_LOG_OFF
 void shRelayControl::setLogOnState(bool _on, Print *_serial)
 {
   logOnState = _on;
@@ -348,6 +358,7 @@ void shRelayControl::setLogOnState(bool _on, Print *_serial)
 }
 
 bool shRelayControl::getLogOnState() { return (logOnState); }
+#endif
 
 void shRelayControl::setButtonBuzzerState(bool _state, int8_t _pin)
 {
@@ -371,7 +382,6 @@ bool shRelayControl::startUdpInteraction(WiFiUDP *_udp)
 
 void shRelayControl::attachWebInterface(shWebServer *_server,
                                         FS *_file_system,
-                                        const String &_relay_config_page,
                                         const String &_tasks_config_page,
                                         const String &_wifi_config_page)
 {
@@ -390,14 +400,9 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
     }
   }
 
-  relay_config_page = _relay_config_page;
   wifi_config_page = _wifi_config_page;
   tasks_config_page = _tasks_config_page;
 
-  if (relay_config_page.indexOf("/") != 0)
-  {
-    relay_config_page = "/" + relay_config_page;
-  }
   if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
   {
     wifi_config_page = "/" + wifi_config_page;
@@ -409,17 +414,17 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
 
   if (http_server)
   { // вызов стартовой страницы модуля реле
-    http_server->on("/", HTTP_GET, handleGetRelayIndexPage);
+    http_server->on("/", HTTP_GET, handleGetIndexPage);
     // вызов страницы настройки модуля реле
-    http_server->on(relay_config_page, HTTP_GET, handleGetRelayConfigPage);
+    http_server->on(FPSTR(RELAY_CONFIG_PAGE), HTTP_GET, handleGetConfigPage);
     // запрос текущих настроек
-    http_server->on(FPSTR(RELAY_GET_CONFIG), HTTP_GET, handleGetRelayConfig);
+    http_server->on(FPSTR(GET_RELAY_CONFIG), HTTP_GET, handleGetRelayConfig);
     // сохранение настроек
     http_server->on(FPSTR(SR_SET_CONFIG), HTTP_POST, handleSetConfig);
     // переключение реле
     http_server->on(FPSTR(RELAY_SWITCH), HTTP_POST, handleRelaySwitch);
     // запрос текущего состояния всех реле
-    http_server->on(FPSTR(RELAY_GET_STATE), HTTP_GET, handleGetRelayState);
+    http_server->on(FPSTR(GET_RELAY_STATE), HTTP_GET, handleGetRelayState);
     // перезагрузка модуля
     http_server->on(FPSTR(SR_RESTART), HTTP_GET, handleRestartModule);
 
@@ -867,10 +872,12 @@ void shSwitchControl::init(uint8_t _switch_count)
     relayCount = _switch_count;
   }
 
+#ifndef SWITCH_RELAY_LOG_OFF
   if (Serial != NULL)
   {
     serial = &Serial;
   }
+#endif
 }
 
 bool shSwitchControl::addRelay(const String &relay_name,
@@ -904,6 +911,7 @@ uint16_t shSwitchControl::getUdpPort()
   return (get_udp_port());
 }
 
+#ifndef SWITCH_RELAY_LOG_OFF
 void shSwitchControl::setLogOnState(bool _on, Print *_serial)
 {
   logOnState = _on;
@@ -911,6 +919,7 @@ void shSwitchControl::setLogOnState(bool _on, Print *_serial)
 }
 
 bool shSwitchControl::getLogOnState() { return (logOnState); }
+#endif
 
 void shSwitchControl::setErrorBuzzerState(bool _state, int8_t _pin)
 {
@@ -940,21 +949,15 @@ bool shSwitchControl::startUdpInteraction(WiFiUDP *_udp)
 
 void shSwitchControl::attachWebInterface(shWebServer *_server,
                                          FS *_file_system,
-                                         const String &_relay_config_page,
                                          const String &_tasks_config_page,
                                          const String &_wifi_config_page)
 {
   http_server = _server;
   file_system = _file_system;
 
-  relay_config_page = _relay_config_page;
   tasks_config_page = _tasks_config_page;
   wifi_config_page = _wifi_config_page;
 
-  if (relay_config_page.indexOf("/") != 0)
-  {
-    relay_config_page = "/" + relay_config_page;
-  }
   if (tasks_config_page.length() > 0 && tasks_config_page.indexOf("/") != 0)
   {
     tasks_config_page = "/" + tasks_config_page;
@@ -968,11 +971,11 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
 
   if (http_server)
   { // вызов стартовой страницы модуля выключателя
-    http_server->on("/", HTTP_GET, handleGetSwitchIndexPage);
+    http_server->on("/", HTTP_GET, handleGetIndexPage);
     // вызов страницы настройки модуля выключателей
-    http_server->on(relay_config_page, HTTP_GET, handleGetSwitchConfigPage);
+    http_server->on(FPSTR(RELAY_CONFIG_PAGE), HTTP_GET, handleGetConfigPage);
     // запрос текущих настроек
-    http_server->on(FPSTR(SWITCH_GET_CONFIG), HTTP_GET, handleGetSwitchConfig);
+    http_server->on(FPSTR(GET_RELAY_CONFIG), HTTP_GET, handleGetSwitchConfig);
     // запрос списка доступных реле
     http_server->on(FPSTR(GET_RELAY_LIST), HTTP_GET, handleGetListOfRemoteRelays);
     // сохранение настроек
@@ -1536,7 +1539,8 @@ static void set_local_relay_state(int8_t index, bool state)
     }
     else
     {
-      SR_PRINT(F("no name relay"));
+      SR_PRINT(F("no name relay index "));
+      SR_PRINT(index);
     }
     SR_PRINT(F(": state - "));
     SR_PRINTLN(get_relay_state(index));
@@ -1718,23 +1722,44 @@ static void checkTasksList(srModuleType _mdl)
   if (tasksArray != NULL && tasksCount > 0)
   {
     tm m_time;
+    // время должно быть синхронизировано (getLocalTime возвращает false
+    // пока год не больше 2016, т.е. часы не установлены)
     if (getLocalTime(&m_time, 0))
     {
       bool is_changed = false;
-      // получаем текущее время в секундах с учетом сдвига по часовому поясу
-      time_t cur_time = (time_t)m_time.tm_hour * 3600ul + (time_t)m_time.tm_min * 60ul + (time_t)m_time.tm_sec + tz_offset;
-      //  проверка на переход за полночь после сдвига по часовому поясу
-      cur_time = (cur_time < 86400ul) ? ((cur_time >= 0) ? cur_time : cur_time + 86400ul)
-                                      : cur_time - 86400ul;
+      // текущая минута локальных суток (0..1439); вычисляется из unix time
+      // со смещением часового пояса; корректный modulo для любого tz_offset
+      int64_t local = (int64_t)get_local_time() + tz_offset;
+      uint32_t cur_minute = (uint32_t)(((local % 86400 + 86400) % 86400) / 60);
+      // день недели берется из номера дня локальных суток, а не из tm_wday,
+      // т.к. часы модуля идут в UTC и tm_wday может отличаться от локального;
+      // epoch (1 января 1970) - четверг, в нашем кодировании это 3
+      uint8_t cur_wday = (uint8_t)(((local / 86400) + 3) % 7);
+      // срабатывание происходит при смене минуты, а не по совпадению секунд;
+      // иначе пропуск тика tick() из-за блокировок в loop() приводил бы к
+      // потере задач, пришедшихся на пропущенную секунду
+      static uint32_t last_minute = 0xFFFFFFFF;
+      if (last_minute == 0xFFFFFFFF)
+      {
+        // первый запуск после установки времени - просто запоминаем текущую
+        // минуту, чтобы не выполнить все задачи сразу
+        last_minute = cur_minute;
+        return;
+      }
+      if (cur_minute == last_minute)
+      {
+        return;
+      }
+      last_minute = cur_minute;
       for (uint8_t i = 0; i < tasksCount; i++)
       {
         if ((tasksArray[i].task_status) &&
-            ((tasksArray[i].time_for_task * 60) == cur_time) &&
+            (tasksArray[i].time_for_task == (int32_t)cur_minute) &&
             (tasksArray[i].relay_index < relayCount))
         {
           if (tasksArray[i].task_repeat == TR_DAILY ||
               tasksArray[i].task_repeat == TR_ONCE ||
-              check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].task_repeat))
+              ((uint8_t)tasksArray[i].task_repeat & (1 << cur_wday)))
           {
             switch (_mdl)
             {
@@ -1773,16 +1798,6 @@ static void checkTasksList(srModuleType _mdl)
       }
     }
   }
-}
-
-static bool check_day_of_week(uint8_t _day, shTaskRepeat _per)
-{
-  // в структуре tm день недели кодируется 0(вск)..6(сбт)
-  // у нас день недели кодируется 0(пнд)..6(вск)
-  // поэтому приводим день недели к нужному виду
-  _day = (_day > 0) ? (_day - 1) : 6;
-  // проверяем наличие нужного бита и возвращаем результат
-  return ((uint8_t)_per & 1 << _day);
 }
 
 static int8_t find_task(shSchedulerData &_task)
@@ -2134,31 +2149,14 @@ static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModule
 }
 
 // ==== реакции сервера ==============================
-static void handleGetConfigPage(String arg, String page)
+static void handleGetConfigPage()
 {
-  String c_lab = F("<p id='label'>");
-  page.replace(c_lab, c_lab + arg);
-  http_server->send(200, FPSTR(TEXT_HTML), page);
+  http_server->send_P(200, TEXT_HTML, CONFIG_PAGE);
 }
 
-static void handleGetRelayConfigPage()
+static void handleGetIndexPage()
 {
-  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(CONFIG_PAGE));
-}
-
-static void handleGetSwitchConfigPage()
-{
-  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(CONFIG_PAGE));
-}
-
-static void handleGetRelayIndexPage()
-{
-  handleGetConfigPage(FPSTR(RELAY_GET_CONFIG), FPSTR(INDEX_PAGE));
-}
-
-static void handleGetSwitchIndexPage()
-{
-  handleGetConfigPage(FPSTR(SWITCH_GET_CONFIG), FPSTR(INDEX_PAGE));
+  http_server->send_P(200, TEXT_HTML, INDEX_PAGE);
 }
 
 static void handleGetConfig(String _msg)
@@ -2199,7 +2197,6 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
     doc[sr_udp_port_str] = udpPort;
     doc[sr_udp_en_str] = (uint8_t)(udp != NULL);
     doc[sr_wificonf_str] = wifi_config_page;
-    doc[sr_relayconf_str] = relay_config_page;
     doc[sr_tasksconf_str] = tasks_config_page;
   }
 
@@ -2322,9 +2319,9 @@ static void setHttpHandleForScheduler()
     // вызов страницы настройки планировщика
     http_server->on(tasks_config_page, HTTP_GET, &handleGetConfigSchedulerPage);
     // заполнение списка задач
-    http_server->on(FPSTR(TASK_LIST_GET), HTTP_GET, handleReadTasksSetting);
+    http_server->on(FPSTR(SR_TASKS), HTTP_GET, handleReadTasksSetting);
     // сохранение списка задач
-    http_server->on(FPSTR(TASK_LIST_SET), HTTP_POST, handleWriteTasksSetting);
+    http_server->on(FPSTR(SR_TASKS), HTTP_POST, handleWriteTasksSetting);
     // получение времени модуля
     http_server->on(FPSTR(TIME_DATA), HTTP_GET, handleReadTimeData);
     // сохранение времени модуля
@@ -2341,7 +2338,7 @@ static void setHttpHandleForScheduler()
 
 static void handleGetConfigSchedulerPage()
 {
-  http_server->send(200, FPSTR(TEXT_HTML), FPSTR(TASK_LIST_PAGE));
+  http_server->send_P(200, TEXT_HTML, TASK_LIST_PAGE);
 }
 
 static void handleReadTasksSetting()

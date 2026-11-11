@@ -39,7 +39,6 @@ const int8_t ledPin = LED_BUILTIN;
 
 shRelayControl relay_control;
 
-String config_page = "/config_page"; // адрес страницы конфигурации модуля
 String tasks_page = "/tasks_page";   // адрес страницы планировщика задач
 
 void setup()
@@ -62,7 +61,7 @@ void setup()
   // подключаем Web-интерфейс
   if (FILESYSTEM.begin())
   {
-    relay_control.attachWebInterface(&HTTP, &FILESYSTEM, config_page, tasks_page);
+    relay_control.attachWebInterface(&HTTP, &FILESYSTEM, tasks_page);
   }
 
   // устанавливаем WiFi-подключение

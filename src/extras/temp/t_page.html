@@ -645,8 +645,7 @@
   При открытии файла в браузере без модуля fetch вернёт
   ошибку, и в ui появится строка статуса.
   */
-      const DATA_URL = "/tasks_get"; // GET  → JSON-строка списка задач
-      const SAVE_URL = "/tasks_set"; // POST → новый список задач
+      const DATA_URL = "/sr_tasks"; // GET  → JSON-строка списка задач, POST → новый список задач
       const TIME_URL = "/time"; // GET → время модуля, POST → установка (unix, ms, tz)
       // как трактовать unix от модуля: false - это UTC, tz только для справки;
       // true - это локальное время пояса tz, для UTC вычитаем смещение
@@ -875,7 +874,7 @@
             rep: t.rep,
           })),
         });
-        const res = await fetch(SAVE_URL, {
+        const res = await fetch(DATA_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body,

@@ -587,17 +587,6 @@ def minify_html(html):
 #  Сборка .h файла
 # --------------------------------------------------------------------------- #
 
-# Прошивка подставляет адрес JSON-эндпоинта поиском этого литерала в тексте
-# страницы (handleGetConfigPage в shSRControl.cpp). Без него страница не может
-# получить конфиг и падает на JSON.parse(HTML).
-REQUIRED_MARKERS = ("<p id='label'>",)
-
-
-def check_markers(body):
-    """Возвращает список обязательных маркеров, отсутствующих в странице."""
-    return [m for m in REQUIRED_MARKERS if m not in body]
-
-
 def make_raw_string(body):
     """
     Оборачивает строку в C++ raw string literal.
@@ -634,14 +623,6 @@ def html_to_h(html_path, h_path, variable_name, minify=True, check=True):
     print('  После миниф.: %d байт' % size)
     if original:
         print('  Экономия:     %.1f%%' % (100 * (1 - size / original)))
-
-    if check:
-        for marker in check_markers(body):
-            sys.stderr.write(
-                '\nВНИМАНИЕ: в %s не найден маркер %s\n'
-                '  Прошивка подставляет по нему адрес JSON-эндпоинта; без него\n'
-                '  страница запросит конфиг по пустому URL и упадёт на '
-                'JSON.parse(HTML).\n' % (h_path, marker))
 
 
 def default_var_name(html_path):

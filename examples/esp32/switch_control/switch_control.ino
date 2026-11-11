@@ -49,7 +49,6 @@ const int8_t buzzerPin = 17;
 
 shSwitchControl switch_control;
 
-String config_page = "/config_page"; // адрес страницы конфигурации модуля
 String tasks_page = "/tasks_page";   // адрес страницы планировщика задач
 
 void setup()
@@ -82,7 +81,7 @@ void setup()
   // подключаем Web-интерфейс
   if (FILESYSTEM.begin())
   {
-    switch_control.attachWebInterface(&HTTP, &FILESYSTEM, config_page, tasks_page);
+    switch_control.attachWebInterface(&HTTP, &FILESYSTEM, tasks_page);
   }
   // подключаем звуковой сигнализатор об ошибке отправки команды удаленному реле
   switch_control.setErrorBuzzerState(true, buzzerPin);

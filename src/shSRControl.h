@@ -82,15 +82,12 @@ struct shRelayData
   int8_t relayPin;           // пин, к которому подключено реле
   uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
   bool relayLastState;       // последнее состояние реле
-  int8_t relayButtonPin;     // пин локальной кнопки, управляющей реле (кнопка располагается
-                             // на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
   srButton *relayButton;     // указатель на локальную кнопку, привязанную к реле
 
   shRelayData() : relayName(""),
                   relayPin(-1),
                   relayControlLevel(HIGH),
-                  relayButtonPin(-1),
                   relayDescription(""),
                   relayLastState(false),
                   relayButton(NULL) {}
@@ -102,7 +99,6 @@ struct shRelayData
               String relay_description = "") : relayName(relay_name),
                                                relayPin(relay_pin),
                                                relayControlLevel(control_level),
-                                               relayButtonPin(relay_button_pin),
                                                relayDescription(relay_description),
                                                relayLastState(false),
                                                relayButton((relay_button_pin < 0) ? NULL
@@ -115,12 +111,10 @@ struct shSwitchData
   String relayName;        // имя ассоциированного с кнопкой удаленного реле
   bool relayFound;         // найдено или нет ассоциированное удаленное реле в сети
   IPAddress relayAddress;  // IP адрес удаленного реле
-  int8_t relayButtonPin;   // кнопка, управляющая удаленным реле
   String relayDescription; // описание удаленного реле
   srButton *relayButton;   // указатель на локальную кнопку, привязанную к реле
 
   shSwitchData() : relayName(""),
-                   relayButtonPin(-1),
                    relayDescription(""),
                    relayFound(false),
                    relayAddress(IPAddress(0ul)),
@@ -128,13 +122,18 @@ struct shSwitchData
 
   shSwitchData(String relay_name,
                int8_t relay_button_pin = -1) : relayName(relay_name),
-                                               relayButtonPin(relay_button_pin),
                                                relayDescription(""),
                                                relayFound(false),
                                                relayAddress(IPAddress(0ul)),
                                                relayButton((relay_button_pin < 0) ? NULL
                                                                                   : new (std::nothrow) srButton(relay_button_pin)) {}
 };
+
+// =====================================================
+
+#ifdef SH_LOG_OFF
+#define SWITCH_RELAY_LOG_OFF
+#endif
 
 // ==== shRelayControl class ===========================
 
@@ -174,7 +173,7 @@ public:
    * @return true если реле добавлено успешно, иначе false
    */
   bool addRelay(const String &relay_name,
-                uint8_t relay_pin,
+                int8_t relay_pin,
                 uint8_t control_level,
                 int8_t relay_button_pin = -1,
                 const String &relay_description = "");
@@ -194,6 +193,7 @@ public:
    */
   uint16_t getUdpPort();
 
+#ifndef SWITCH_RELAY_LOG_OFF
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
    *
@@ -209,6 +209,7 @@ public:
    * @return false
    */
   bool getLogOnState();
+#endif
 
   /**
    * @brief включить/выключить озвучивание нажатия локальных кнопок
@@ -250,13 +251,11 @@ public:
    *
    * @param _server ссылка на экземпляр Web-сервера, с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _relay_config_page адрес, по которому будет вызываться Web-страница конфигурации реле
    * @param _tasks_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    * @param _wifi_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    */
   void attachWebInterface(shWebServer *_server,
                           FS *_file_system,
-                          const String &_relay_config_page = "/relay_config",
                           const String &_tasks_config_page = "",
                           const String &_wifi_config_page = "");
 
@@ -678,6 +677,7 @@ public:
    */
   uint16_t getUdpPort();
 
+#ifndef SWITCH_RELAY_LOG_OFF
   /**
    * @brief включение/отключение вывода информации о работе модуля через Serial
    *
@@ -693,6 +693,7 @@ public:
    * @return false
    */
   bool getLogOnState();
+#endif
 
   /**
    * @brief включить/выключить подачу звукового сигнала об ошибке отправки команды удаленному реле
@@ -756,13 +757,11 @@ public:
    *
    * @param _server ссылка на экземпляр Web-сервера, с которым будет работать модуль
    * @param _file_system ссылка на экземпляр файловой системы модуля для сохранения файла с настройками
-   * @param _relay_config_page адрес, по которому будет вызываться Web-страница конфигурации реле
    * @param _tasks_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    * @param _wifi_config_page адрес, по которому будет вызываться Web-страница настройки WiFi
    */
   void attachWebInterface(shWebServer *_server,
                           FS *_file_system,
-                          const String &_relay_config_page = "/relay_config",
                           const String &_tasks_config_page = "",
                           const String &_wifi_config_page = "");
 

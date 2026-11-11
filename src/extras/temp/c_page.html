@@ -210,11 +210,6 @@
         min-width: 120px;
       }
 
-      /* маркер адреса JSON-эндпоинта, который подставляет прошивка */
-      #label {
-        display: none;
-      }
-
       /* динамические поля реле (создаются через JS) */
       #relay_list label {
         display: block;
@@ -236,7 +231,6 @@
     </style>
   </head>
   <body>
-    <p id="label"></p>
     <div id="main">
       <div class="tabs">
         <h3 id="h3"></h3>
@@ -331,6 +325,7 @@
       </div>
     </div>
     <script>
+      const DATA_URL = "/get_config";
       var dest;
       function showAlert(doc) {
         if (
@@ -398,11 +393,8 @@
         btnSaveEnabled();
       }
       function getConfig() {
-        var c_lab = document.getElementById("label");
-        var c_page = c_lab.innerHTML;
-        c_lab.innerHTML = "";
         var request = new XMLHttpRequest();
-        request.open("GET", c_page, true);
+        request.open("GET", DATA_URL, true);
         request.onload = function () {
           if (request.readyState == 4 && request.status == 200) {
             var config_str = request.responseText;
@@ -468,6 +460,7 @@
               d.append(inp2);
             }
           }
+          if(dest === "switch") getRelayList();
         };
         request.send();
       }
@@ -524,7 +517,7 @@
         .addEventListener("input", checkString);
       document.addEventListener("DOMContentLoaded", function () {
         getConfig();
-        getRelayList();
+        // getRelayList();
       });
     </script>
   </body>
