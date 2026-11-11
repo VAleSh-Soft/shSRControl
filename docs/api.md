@@ -786,7 +786,7 @@ bool isSecondButtonPressed(uint8_t _idx, uint8_t _but_2, uint8_t btn_state = BTN
 здесь:
 - `_idx` - индекс в массиве реле, к которому привязана кнопка;
 - `_but_2` - индекс в массиве реле, к которому привязана вторая кнопка;
-- `btn_state` - состояние, которое отслеживается методом; по умолчанию обычный
+- `btn_state` - состояние, которое отслеживается методом; по умолчанию обычный клик
 
 <hr>
 
@@ -822,7 +822,7 @@ void setButtonTimeoutOfLongClick(uint8_t _idx, uint16_t new_timeout);
 
 <hr>
 
-установка интервала подавления дребезга контактов
+установка интервала подавления дребезга контактов (значение по умолчанию 50 мс)
 ```
 void setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout);
 ```
