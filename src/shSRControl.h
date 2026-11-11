@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <new>
 #if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -78,19 +79,21 @@ enum srModuleType : uint8_t
 struct shRelayData
 {
   String relayName;          // имя реле
-  uint8_t relayPin;          // пин, к которому подключено реле
+  int8_t relayPin;           // пин, к которому подключено реле
   uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
   bool relayLastState;       // последнее состояние реле
   int8_t relayButtonPin;     // пин локальной кнопки, управляющей реле (кнопка располагается
                              // на самом модуле и предназначена для ручного управления реле)
   String relayDescription;   // описание реле
+  srButton *relayButton;     // указатель на локальную кнопку, привязанную к реле
 
   shRelayData() : relayName(""),
-                  relayPin(255),
+                  relayPin(-1),
                   relayControlLevel(HIGH),
                   relayButtonPin(-1),
                   relayDescription(""),
-                  relayLastState(false) {}
+                  relayLastState(false),
+                  relayButton(NULL) {}
 
   shRelayData(String relay_name,
               uint8_t relay_pin,
@@ -101,7 +104,9 @@ struct shRelayData
                                                relayControlLevel(control_level),
                                                relayButtonPin(relay_button_pin),
                                                relayDescription(relay_description),
-                                               relayLastState(false) {}
+                                               relayLastState(false),
+                                               relayButton((relay_button_pin < 0) ? NULL
+                                                                                  : new (std::nothrow) srButton(relay_button_pin)) {}
 };
 
 // описание свойств выключателя
@@ -112,19 +117,23 @@ struct shSwitchData
   IPAddress relayAddress;  // IP адрес удаленного реле
   int8_t relayButtonPin;   // кнопка, управляющая удаленным реле
   String relayDescription; // описание удаленного реле
+  srButton *relayButton;   // указатель на локальную кнопку, привязанную к реле
 
   shSwitchData() : relayName(""),
                    relayButtonPin(-1),
                    relayDescription(""),
                    relayFound(false),
-                   relayAddress(IPAddress(0ul)) {}
+                   relayAddress(IPAddress(0ul)),
+                   relayButton(NULL) {}
 
   shSwitchData(String relay_name,
                int8_t relay_button_pin = -1) : relayName(relay_name),
                                                relayButtonPin(relay_button_pin),
                                                relayDescription(""),
                                                relayFound(false),
-                                               relayAddress(IPAddress(0ul)) {}
+                                               relayAddress(IPAddress(0ul)),
+                                               relayButton((relay_button_pin < 0) ? NULL
+                                                                                  : new (std::nothrow) srButton(relay_button_pin)) {}
 };
 
 // ==== shRelayControl class ===========================
@@ -612,8 +621,8 @@ public:
 
   /**
    * @brief установка интервала подавления дребезга контактов кнопки (значение по умолчанию 50 мс)
-   * 
-   * @param new_timeout 
+   *
+   * @param new_timeout
    */
   void setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout);
 };
@@ -1077,8 +1086,8 @@ public:
 
   /**
    * @brief установка интервала подавления дребезга контактов кнопки (значение по умолчанию 50 мс)
-   * 
-   * @param new_timeout 
+   *
+   * @param new_timeout
    */
   void setButtonTimeoutOfDebounce(uint8_t _idx, uint16_t new_timeout);
 };

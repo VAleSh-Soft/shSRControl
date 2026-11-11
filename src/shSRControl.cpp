@@ -115,8 +115,6 @@ static srModuleType moduleFlag = mtRelay;
 
 static shRelayData *relayArray = NULL;
 static shSwitchData *switchArray = NULL;
-static srButton *buttonArray = NULL;
-static String *relayNameList = NULL;
 static int8_t relayCount = 0;
 
 static shSchedulerData *tasksArray = NULL;
@@ -188,11 +186,7 @@ static void clearListOfRemoteRelays();
 
 // ===================================================
 
-static void arrays_init(uint8_t _count);
-
-// ===================================================
-
-static void checkTasksList(srModuleType _mdt);
+static void checkTasksList(srModuleType _mdl);
 static bool check_day_of_week(uint8_t _day, shTaskRepeat _per);
 static int8_t find_task(shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
@@ -200,7 +194,6 @@ static bool del_task_in_list(uint8_t _idx);
 static void set_task_status(uint8_t _idx, bool _state);
 static bool set_task_data(uint8_t _idx, shSchedulerData &_task);
 static uint8_t get_task_count(bool is_active = false);
-static void getRelayNameList();
 static void set_local_time(time_t _now);
 static time_t get_local_time();
 static void set_time_zone_offset(time_t _tz);
@@ -252,8 +245,8 @@ static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
                                 const IPAddress _ip);
-static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt);
-static String get_config_json_string(srModuleType _mdt);
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl);
+static String get_config_json_string(srModuleType _mdl);
 
 static void handleSetConfig();
 
@@ -264,13 +257,13 @@ static void handleGetRelayState();
 static void handleRestartModule();
 
 // ===================================================
-static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc);
+static bool load_setting(srModuleType _mdl, DynamicJsonDocument &doc);
 
-static void set_config_file_name(const String &_name, srModuleType _mdt);
-static String get_config_file_name(srModuleType _mdt);
-static bool save_config_file(srModuleType _mdt);
-static bool save_config_file(srModuleType _mdt, DynamicJsonDocument &doc);
-static bool load_config_file(srModuleType _mdt);
+static void set_config_file_name(const String &_name, srModuleType _mdl);
+static String get_config_file_name(srModuleType _mdl);
+static bool save_config_file(srModuleType _mdl);
+static bool save_config_file(srModuleType _mdl, DynamicJsonDocument &doc);
+static bool load_config_file(srModuleType _mdl);
 
 // оператор сравнения двух задач (если понадобится определять дубликаты)
 bool operator==(const shSchedulerData &a, const shSchedulerData &b)
@@ -303,8 +296,6 @@ void shRelayControl::init(uint8_t _relay_count)
     relayCount = _relay_count;
   }
 
-  arrays_init(relayCount);
-
   if (Serial != NULL)
   {
     serial = &Serial;
@@ -322,17 +313,14 @@ bool shRelayControl::addRelay(const String &relay_name,
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      if (relayArray[i].relayName == "")
+      if (relayArray[i].relayName == "" && relayArray[i].relayPin >= 0)
       {
         relayArray[i] = shRelayData(relay_name,
                                     relay_pin,
                                     control_level,
                                     relay_button_pin,
                                     relay_description);
-        if (relay_button_pin >= 0 && buttonArray != NULL)
-        {
-          buttonArray[i] = srButton(relay_button_pin);
-        }
+
         pinMode(relay_pin, OUTPUT);
         digitalWrite(relay_pin, !control_level);
         result = true;
@@ -443,12 +431,12 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
 void shRelayControl::tick()
 {
   // опрос кнопок
-  if (buttonArray != NULL)
+  if (relayArray != NULL)
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      if (relayArray[i].relayButtonPin >= 0 &&
-          buttonArray[i].getButtonState() == BTN_DOWN)
+      if (relayArray[i].relayButton != NULL &&
+          relayArray[i].relayButton->getButtonState() == BTN_DOWN)
       {
         bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
         switch_local_relay(i);
@@ -879,8 +867,6 @@ void shSwitchControl::init(uint8_t _switch_count)
     relayCount = _switch_count;
   }
 
-  arrays_init(relayCount);
-
   if (Serial != NULL)
   {
     serial = &Serial;
@@ -899,10 +885,6 @@ bool shSwitchControl::addRelay(const String &relay_name,
       {
         switchArray[i] = shSwitchData(relay_name,
                                       relay_button_pin);
-        if (relay_button_pin >= 0 && buttonArray != NULL)
-        {
-          buttonArray[i] = srButton(relay_button_pin);
-        }
 
         result = true;
         break;
@@ -1008,12 +990,12 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
 void shSwitchControl::tick()
 {
   // опрос кнопок
-  if (buttonArray != NULL)
+  if (switchArray != NULL)
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      if (switchArray[i].relayButtonPin >= 0 &&
-          buttonArray[i].getButtonState() == BTN_DOWN)
+      if (switchArray[i].relayButton != NULL &&
+          switchArray[i].relayButton->getButtonState() == BTN_DOWN)
       {
         bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
         switch_remote_relay(i);
@@ -1548,7 +1530,14 @@ static void set_local_relay_state(int8_t index, bool state)
       save_config_file(mtRelay);
     }
 
-    SR_PRINT(relayArray[index].relayName);
+    if (relayArray[index].relayName != "")
+    {
+      SR_PRINT(relayArray[index].relayName);
+    }
+    else
+    {
+      SR_PRINT(F("no name relay"));
+    }
     SR_PRINT(F(": state - "));
     SR_PRINTLN(get_relay_state(index));
   }
@@ -1723,25 +1712,8 @@ static void clearListOfRemoteRelays()
 
 // ===================================================
 
-static void arrays_init(uint8_t _count)
-{
-  if (relayNameList)
-  {
-    delete[] relayNameList;
-  }
-
-  relayNameList = new (std::nothrow) String[_count];
-
-  if (buttonArray)
-  {
-    delete[] buttonArray;
-  }
-
-  buttonArray = new (std::nothrow) srButton[_count];
-}
-
 // ==== обработка списка заданий планировщика ========
-static void checkTasksList(srModuleType _mdt)
+static void checkTasksList(srModuleType _mdl)
 {
   if (tasksArray != NULL && tasksCount > 0)
   {
@@ -1764,7 +1736,7 @@ static void checkTasksList(srModuleType _mdt)
               tasksArray[i].task_repeat == TR_ONCE ||
               check_day_of_week((uint8_t)m_time.tm_wday, tasksArray[i].task_repeat))
           {
-            switch (_mdt)
+            switch (_mdl)
             {
             case mtRelay:
               set_local_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
@@ -1781,13 +1753,11 @@ static void checkTasksList(srModuleType _mdt)
             SR_PRINT(tasksArray[i].time_for_task / 60);
             SR_PRINT(F(":"));
             SR_PRINTLN(tasksArray[i].time_for_task % 60);
-            if (relayNameList != NULL)
-            {
-              SR_PRINT(F("relay: "));
-              SR_PRINTLN(relayNameList[tasksArray[i].relay_index]);
-              SR_PRINT(F("action: "));
-              SR_PRINTLN(tasksArray[i].action_for_relay ? "on" : "off");
-            }
+            SR_PRINT(F("relay: "));
+            SR_PRINTLN((_mdl == mtRelay) ? relayArray[tasksArray[i].relay_index].relayName
+                                         : switchArray[tasksArray[i].relay_index].relayName);
+            SR_PRINT(F("action: "));
+            SR_PRINTLN(tasksArray[i].action_for_relay ? "on" : "off");
 
             if (tasksArray[i].task_repeat == TR_ONCE)
             {
@@ -1953,17 +1923,6 @@ static uint8_t get_task_count(bool is_active)
   return result;
 }
 
-static void getRelayNameList()
-{
-  if (relayNameList != NULL)
-  {
-    for (uint8_t i = 0; i < relayCount; i++)
-    {
-      relayNameList[i] = (moduleFlag == mtRelay) ? relayArray[i].relayName : switchArray[i].relayName;
-    }
-  }
-}
-
 static void set_local_time(time_t _now)
 {
   struct timeval tv = {.tv_sec = _now, .tv_usec = 0};
@@ -2027,16 +1986,16 @@ static void set_ntp_data(bool _ntp_enabled,
 // ===================================================
 static bool is_valid_button(uint8_t _idx, srModuleType _mdl)
 {
-  bool result = _idx < relayCount && buttonArray != NULL;
+  bool result = _idx < relayCount;
   if (result)
   {
     switch (_mdl)
     {
     case mtRelay:
-      result = relayArray[_idx].relayButtonPin >= 0;
+      result = relayArray != NULL && relayArray[_idx].relayButton != NULL;
       break;
     case mtSwitch:
-      result = switchArray[_idx].relayButtonPin >= 0;
+      result = switchArray != NULL && switchArray[_idx].relayButton != NULL;
       break;
     default:
       result = false;
@@ -2055,9 +2014,9 @@ static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    return (buttonArray[_idx].getLastState());
+    return (relayArray[_idx].relayButton->getLastState());
   case mtSwitch:
-    return (buttonArray[_idx].getLastState());
+    return (switchArray[_idx].relayButton->getLastState());
   default:
     return BTN_RELEASED;
   }
@@ -2072,9 +2031,9 @@ static bool is_button_closed(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    return (buttonArray[_idx].isButtonClosed());
+    return (relayArray[_idx].relayButton->isButtonClosed());
   case mtSwitch:
-    return (buttonArray[_idx].isButtonClosed());
+    return (switchArray[_idx].relayButton->isButtonClosed());
   default:
     return false;
   }
@@ -2092,11 +2051,11 @@ static bool is_second_button_pressed(uint8_t _idx,
   switch (_mdl)
   {
   case mtRelay:
-    return (buttonArray[_idx].isSecondButtonPressed(&buttonArray[_but_2],
-                                                    btn_state));
+    return (relayArray[_idx].relayButton->isSecondButtonPressed(relayArray[_but_2].relayButton,
+                                                                btn_state));
   case mtSwitch:
-    return (buttonArray[_idx].isSecondButtonPressed(&buttonArray[_but_2],
-                                                    btn_state));
+    return (switchArray[_idx].relayButton->isSecondButtonPressed(switchArray[_but_2].relayButton,
+                                                                 btn_state));
   default:
     return false;
   }
@@ -2111,10 +2070,10 @@ static void reset_button_state(uint8_t _idx, srModuleType _mdl)
   switch (_mdl)
   {
   case mtRelay:
-    buttonArray[_idx].resetButtonState();
+    relayArray[_idx].relayButton->resetButtonState();
     break;
   case mtSwitch:
-    buttonArray[_idx].resetButtonState();
+    switchArray[_idx].relayButton->resetButtonState();
     break;
   default:
     break;
@@ -2130,10 +2089,10 @@ static void set_long_click_mode(uint8_t _idx, uint8_t longclickmode, srModuleTyp
   switch (_mdl)
   {
   case mtRelay:
-    buttonArray[_idx].setLongClickMode(longclickmode);
+    relayArray[_idx].relayButton->setLongClickMode(longclickmode);
     break;
   case mtSwitch:
-    buttonArray[_idx].setLongClickMode(longclickmode);
+    switchArray[_idx].relayButton->setLongClickMode(longclickmode);
     break;
   default:
     break;
@@ -2149,10 +2108,10 @@ static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModu
   switch (_mdl)
   {
   case mtRelay:
-    buttonArray[_idx].setTimeoutOfLongClick(new_timeout);
+    relayArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
     break;
   case mtSwitch:
-    buttonArray[_idx].setTimeoutOfLongClick(new_timeout);
+    switchArray[_idx].relayButton->setTimeoutOfLongClick(new_timeout);
     break;
   }
 }
@@ -2166,10 +2125,10 @@ static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModule
   switch (_mdl)
   {
   case mtRelay:
-    buttonArray[_idx].setTimeoutOfDebounce(new_timeout);
+    relayArray[_idx].relayButton->setTimeoutOfDebounce(new_timeout);
     break;
   case mtSwitch:
-    buttonArray[_idx].setTimeoutOfDebounce(new_timeout);
+    switchArray[_idx].relayButton->setTimeoutOfDebounce(new_timeout);
     break;
   }
 }
@@ -2230,9 +2189,9 @@ static void get_relay_data_json(JsonObject &rel,
   rel[sr_ip_addr_str] = _ip.toString();
 }
 
-static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
+static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
 {
-  if ((uint8_t)_mdt <= 1)
+  if ((uint8_t)_mdl <= 1)
   {
     // только для mtRelay и mtSwitch
     doc[sr_module_description_str] = module_description;
@@ -2244,7 +2203,7 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
     doc[sr_tasksconf_str] = tasks_config_page;
   }
 
-  switch (_mdt)
+  switch (_mdl)
   {
   case mtRelay:
   {
@@ -2316,11 +2275,11 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdt)
   }
 }
 
-static String get_config_json_string(srModuleType _mdt)
+static String get_config_json_string(srModuleType _mdl)
 {
   DynamicJsonDocument doc(CONFIG_SIZE);
 
-  get_config_json_doc(doc, _mdt);
+  get_config_json_doc(doc, _mdl);
 
   String _res = "";
   serializeJson(doc, _res);
@@ -2377,7 +2336,6 @@ static void setHttpHandleForScheduler()
 
     load_config_file(mtTasks);
     load_config_file(mtNtp);
-    getRelayNameList();
   }
 }
 
@@ -2396,11 +2354,13 @@ static void handleReadTasksSetting()
   doc[sr_tmax_str] = MAX_TASKS_COUNT;
 
   JsonArray relays = doc.createNestedArray(sr_r_list_str);
-  if (relayNameList != NULL)
+  if ((moduleFlag == mtRelay && relayArray != NULL) ||
+      (moduleFlag == mtSwitch && switchArray != NULL))
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      relays.add(relayNameList[i]);
+      relays.add((moduleFlag == mtRelay) ? relayArray[i].relayName
+                                         : switchArray[i].relayName);
     }
   }
 
@@ -2586,7 +2546,6 @@ static void handleSetConfig()
       save_config_file(mtSwitch, doc);
       find_remote_relays();
     }
-    getRelayNameList();
     http_server->send(200, FPSTR(TEXT_HTML), F("<META http-equiv='refresh' content='1;URL=/'><p align='center'>Save settings...</p>"));
   }
 }
@@ -2652,9 +2611,9 @@ static void handleRestartModule()
   ESP.restart();
 }
 
-static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
+static bool load_setting(srModuleType _mdl, DynamicJsonDocument &doc)
 {
-  if ((uint8_t)_mdt <= 1)
+  if ((uint8_t)_mdl <= 1)
   {
     // только для mtRelay и mtSwitch
     getStringValue(module_description, doc[sr_module_description_str].as<String>());
@@ -2668,7 +2627,7 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
     }
   }
   int8_t x;
-  switch (_mdt)
+  switch (_mdl)
   {
   case mtRelay:
   {
@@ -2767,9 +2726,9 @@ static bool load_setting(srModuleType _mdt, DynamicJsonDocument &doc)
   return (true);
 }
 
-static void set_config_file_name(const String &_name, srModuleType _mdt)
+static void set_config_file_name(const String &_name, srModuleType _mdl)
 {
-  switch (_mdt)
+  switch (_mdl)
   {
   case mtRelay:
     relayFileConfigName = _name;
@@ -2788,9 +2747,9 @@ static void set_config_file_name(const String &_name, srModuleType _mdt)
   }
 }
 
-static String get_config_file_name(srModuleType _mdt)
+static String get_config_file_name(srModuleType _mdl)
 {
-  switch (_mdt)
+  switch (_mdl)
   {
   case mtRelay:
     return (relayFileConfigName);
@@ -2805,21 +2764,21 @@ static String get_config_file_name(srModuleType _mdt)
   }
 }
 
-static bool save_config_file(srModuleType _mdt)
+static bool save_config_file(srModuleType _mdl)
 {
   DynamicJsonDocument doc(CONFIG_SIZE);
-  get_config_json_doc(doc, _mdt);
-  return (save_config_file(_mdt, doc));
+  get_config_json_doc(doc, _mdl);
+  return (save_config_file(_mdl, doc));
 }
 
-static bool save_config_file(srModuleType _mdt, DynamicJsonDocument &doc)
+static bool save_config_file(srModuleType _mdl, DynamicJsonDocument &doc)
 {
   if (!file_system)
   {
     return (false);
   }
 
-  String fileName = get_config_file_name(_mdt);
+  String fileName = get_config_file_name(_mdl);
 
   SR_PRINT(F("Save settings to file "));
   SR_PRINTLN(fileName);
@@ -2855,10 +2814,10 @@ static bool save_config_file(srModuleType _mdt, DynamicJsonDocument &doc)
   return (result);
 }
 
-static bool load_config_file(srModuleType _mdt)
+static bool load_config_file(srModuleType _mdl)
 {
   File configFile;
-  String fileName = get_config_file_name(_mdt);
+  String fileName = get_config_file_name(_mdl);
 
   SR_PRINT(F("Load settings from file "));
   SR_PRINTLN(fileName);
@@ -2872,7 +2831,7 @@ static bool load_config_file(srModuleType _mdt)
   if (!result)
   {
     SR_PRINTLN(F("Config file not found, default config used."));
-    save_config_file(_mdt);
+    save_config_file(_mdl);
     return (result);
   }
   // Проверяем размер файла, будем использовать файл размером до 2048/4096 байт
@@ -2898,7 +2857,7 @@ static bool load_config_file(srModuleType _mdt)
   else
   // Теперь можно получить значения из doc
   {
-    result = load_setting(_mdt, doc);
+    result = load_setting(_mdl, doc);
   }
   if (result)
   {

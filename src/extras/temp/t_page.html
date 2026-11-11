@@ -844,7 +844,9 @@
           fNtp3.value = data.ntp_server3 || "";
           // если модуль не вернул tz - оставляем пояс браузера
           const tzFromDevice = Number(data.tz);
-          setTzSelect(Number.isFinite(tzFromDevice) ? tzFromDevice : tzOffsetSec());
+          setTzSelect(
+            Number.isFinite(tzFromDevice) ? tzFromDevice : tzOffsetSec(),
+          );
           ntpDirty = false;
         } catch (e) {}
         // модуль без NTP-настроек отвечает ошибкой: поля остаются пустыми
@@ -920,7 +922,9 @@
 
       function relayName(index) {
         const n = Number(index);
-        return relayNames[n] !== undefined ? relayNames[n] : "реле " + n;
+        return relayNames[n] !== undefined && relayNames[n] !== ""
+          ? relayNames[n]
+          : "реле " + n;
       }
 
       // смещение локального пояса в секундах, восток - положительное (МСК = 10800)
@@ -1236,7 +1240,7 @@
         relayNames.forEach((name, i) => {
           const opt = document.createElement("option");
           opt.value = i;
-          opt.textContent = name;
+          opt.textContent = name !== "" ? name : "реле " + i;
           fIndex.append(opt);
         });
         // если реле задачи нет в списке (добавились новые) — создаём опцию
