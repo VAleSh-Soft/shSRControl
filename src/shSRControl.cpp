@@ -135,8 +135,8 @@ static String switchFileConfigName = "/switch.json";
 static String tasksFileConfigName = "/tasks.json";
 static String ntpFileConfigName = "/ntp.json";
 
-static uint32_t checkInterval = DEFAULT_CHECK_INTERVAL;
-static String listOfRemoteRelays[SIZE_LIST_OF_REMOTE_RELAYS];
+static uint32_t checkInterval = SR_DEFAULT_CHECK_INTERVAL;
+static String listOfRemoteRelays[SR_SIZE_LIST_OF_REMOTE_RELAYS];
 
 static bool ntp_enabled = true;
 static String ntp_server1 = "ru.pool.ntp.org";
@@ -156,7 +156,7 @@ static bool logOnState = true;
 static shWebServer *http_server = NULL;
 static FS *file_system = NULL;
 static WiFiUDP *udp = NULL;
-static uint16_t udpPort = DEFAULT_UDP_PORT;
+static uint16_t udpPort = SR_DEFAULT_UDP_PORT;
 
 static shBuzzer bzr;
 
@@ -1685,7 +1685,7 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name)
 {
   if (relay_name.length() > 0)
   {
-    for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+    for (uint8_t i = 0; i < SR_SIZE_LIST_OF_REMOTE_RELAYS; i++)
     {
       // если строка в списке есть, ничего не делаем
       if (listOfRemoteRelays[i] == relay_name)
@@ -1693,7 +1693,7 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name)
     }
 
     // если строка не в списке, добавляем
-    for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+    for (uint8_t i = 0; i < SR_SIZE_LIST_OF_REMOTE_RELAYS; i++)
     {
       if (listOfRemoteRelays[i].length() == 0)
       {
@@ -1708,7 +1708,7 @@ static int8_t addRelayToListOfRemoteRelays(const String &relay_name)
 
 static void clearListOfRemoteRelays()
 {
-  for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+  for (uint8_t i = 0; i < SR_SIZE_LIST_OF_REMOTE_RELAYS; i++)
   {
     listOfRemoteRelays[i] = "";
   }
@@ -2298,7 +2298,7 @@ static void handleGetListOfRemoteRelays()
   DynamicJsonDocument doc(RELAY_DATA_SIZE);
   JsonArray relays = doc.createNestedArray(sr_relays_str);
 
-  for (uint8_t i = 0; i < SIZE_LIST_OF_REMOTE_RELAYS; i++)
+  for (uint8_t i = 0; i < SR_SIZE_LIST_OF_REMOTE_RELAYS; i++)
   {
     if (listOfRemoteRelays[i].length() > 0)
     {
@@ -2615,12 +2615,12 @@ static bool load_setting(srModuleType _mdl, DynamicJsonDocument &doc)
     // только для mtRelay и mtSwitch
     getStringValue(module_description, doc[sr_module_description_str].as<String>());
     getStringValue(module_name, doc[sr_module_name_str].as<String>());
-    udpPort = (doc[sr_udp_port_str].isNull()) ? DEFAULT_UDP_PORT
+    udpPort = (doc[sr_udp_port_str].isNull()) ? SR_DEFAULT_UDP_PORT
                                               : doc[sr_udp_port_str].as<uint16_t>();
 
     if (udpPort == 0)
     {
-      udpPort = DEFAULT_UDP_PORT;
+      udpPort = SR_DEFAULT_UDP_PORT;
     }
   }
   int8_t x;
@@ -2656,7 +2656,7 @@ static bool load_setting(srModuleType _mdl, DynamicJsonDocument &doc)
       getStringValue(switchArray[i].relayDescription,
                      doc[sr_relays_str][i][sr_descr_str].as<String>());
     }
-    checkInterval = (doc[sr_check_interval_str].isNull()) ? DEFAULT_CHECK_INTERVAL
+    checkInterval = (doc[sr_check_interval_str].isNull()) ? SR_DEFAULT_CHECK_INTERVAL
                                                           : doc[sr_check_interval_str].as<uint32_t>() * 60000ul;
   }
   break;

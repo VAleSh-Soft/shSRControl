@@ -22,9 +22,9 @@ typedef WebServer shWebServer;
 typedef ESP8266WebServer shWebServer;
 #endif
 
-#define DEFAULT_UDP_PORT 54321         // номер порта по умолчанию для обмена udp-пакетами
-#define DEFAULT_CHECK_INTERVAL 60000ul // интервал опроса удаленных реле модулем выключателя, миллисекунд
-#define SIZE_LIST_OF_REMOTE_RELAYS 10  // максимальный размер списка доступных в сети удаленных реле
+#define SR_DEFAULT_UDP_PORT 54321         // номер порта по умолчанию для обмена udp-пакетами
+#define SR_DEFAULT_CHECK_INTERVAL 60000ul // интервал опроса удаленных реле модулем выключателя, миллисекунд
+#define SR_SIZE_LIST_OF_REMOTE_RELAYS 10  // максимальный размер списка доступных в сети удаленных реле
 
 // описание флагов периодичности выполнения задачи
 enum shTaskRepeat : uint8_t
