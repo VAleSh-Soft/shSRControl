@@ -1,5 +1,6 @@
 #if defined(ARDUINO_ARCH_ESP8266)
 #include <sntp.h>
+#include <user_interface.h>
 #elif defined(ARDUINO_ARCH_ESP32)
 #include <lwip/apps/sntp.h>
 #endif
@@ -1382,8 +1383,15 @@ static IPAddress get_broadcast_address()
 #if defined(ARDUINO_ARCH_ESP32)
     result = WiFi.softAPBroadcastIP();
 #else
-    // предполагаем, что маска сети у точки доступа 255.255.255.0
-    result = (uint32_t)WiFi.softAPIP() | ~((uint32_t)IPAddress(255, 255, 255, 0));
+    ip_info info;
+    if (wifi_get_ip_info(SOFTAP_IF, &info))
+    {
+      result = (uint32_t)WiFi.softAPIP() | ~(info.netmask.addr);
+    }
+    else
+    {
+      result = IPAddress(255, 255, 255, 225);
+    }
 #endif
   }
 
