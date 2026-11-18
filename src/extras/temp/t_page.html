@@ -653,7 +653,11 @@
       {"state":1, "time":420, "rel":0, "act":1, "rep":0},
       ...
     ],
-    "r_list": ["socket_1", "socket_2", ...],
+    "r_list": [
+      {"name":"socket_1", "r_type":"relay"},
+      {"name":"relay1", "r_type":"virtual"},
+      ...
+    ],
     "tmax": 32
   }
   Маппинг полей:
@@ -662,7 +666,10 @@
     rel       - uint8 (число) → index реле
     act       - bool  (0/1)  → action_for_relay
     rep       - uint8      → periodicity (битовая маска дней недели)
-  r_list  - список имён реле (отдаётся модулем, на модуль не отправляется)
+    name      - String     → имя реле
+    r_type    - "relay" | "virtual" → тип реле
+  r_list  - список реле с именами и типами (отдаётся модулем, на модуль не
+            отправляется); у виртуального реле действие не выбирается
   tmax    - предельное число задач (отдаётся модулем, на модуль не отправляется);
             у esp8266 память меньше, чем у esp32, поэтому лимит задаёт прошивка
 
@@ -718,7 +725,8 @@
   ======================== СОСТОЯНИЕ ========================
   */
       let tasks = []; // массив {id, state, time, rel, act, rep}
-      let relayNames = []; // r_list из JSON
+      let relayNames = []; // r_list[].name из JSON
+      let relayTypes = []; // r_list[].r_type из JSON
       let selectedId = null;
       let editingId = null;
       let dirty = false;
@@ -783,7 +791,14 @@
           act: !!t.act,
           rep: Number(t.rep) || 0,
         }));
-        relayNames = Array.isArray(rList) ? rList : [];
+        relayNames = Array.isArray(rList)
+          ? rList.map((r) => (r && r.name != null ? String(r.name) : ""))
+          : [];
+        relayTypes = Array.isArray(rList)
+          ? rList.map((r) =>
+              r && r.r_type != null ? String(r.r_type) : RELAY_TYPE,
+            )
+          : [];
       }
 
       /*
@@ -964,24 +979,19 @@
         return h + ":" + m;
       }
 
-      // суффикс, которым прошивка помечает виртуальные реле в r_list
-      const VIRTUAL_SUFFIX = ": {..}";
+      // значения поля r_type из r_list, совпадают с константами прошивки
+      const RELAY_TYPE = "relay",
+        VIRTUAL_TYPE = "virtual";
 
       function isVirtualRelay(index) {
-        const n = Number(index);
-        return relayNames[n] !== undefined &&
-          relayNames[n].endsWith(VIRTUAL_SUFFIX);
+        return relayTypes[Number(index)] === VIRTUAL_TYPE;
       }
 
       function relayName(index) {
         const n = Number(index);
-        const raw = relayNames[n];
-        if (raw !== undefined && raw !== "") {
-          return raw.endsWith(VIRTUAL_SUFFIX)
-            ? raw.slice(0, -VIRTUAL_SUFFIX.length)
-            : raw;
-        }
-        return "реле " + n;
+        return relayNames[n] !== undefined && relayNames[n] !== ""
+          ? relayNames[n]
+          : "реле " + n;
       }
 
       // смещение локального пояса в секундах, восток - положительное (МСК = 10800)

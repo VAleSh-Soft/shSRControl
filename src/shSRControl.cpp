@@ -2477,6 +2477,7 @@ static void handleReadTasksSetting()
   static DynamicJsonDocument doc(CONFIG_SIZE);
   doc.clear();
 
+  // получаем список задач
   get_config_json_doc(doc, mtTasks);
   doc[sr_tmax_str] = MAX_TASKS_COUNT;
 
@@ -2484,16 +2485,15 @@ static void handleReadTasksSetting()
   if ((moduleFlag == mtRelay && relayArray != NULL) ||
       (moduleFlag == mtSwitch && switchArray != NULL))
   {
+    // получаем список реле с их типом 
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      String name = (moduleFlag == mtRelay) ? relayArray[i].relayName
-                                            : switchArray[i].relayName;
-      if (moduleFlag == mtRelay && relayArray[i].relayCallback != NULL)
-      {
-        name += ": {..}";
-      }
-
-      relays.add(name);
+      JsonObject rel = relays.createNestedObject();
+      rel[sr_name_str] = (moduleFlag == mtRelay) ? relayArray[i].relayName
+                                                 : switchArray[i].relayName;
+      rel[sr_relay_type_str] = (moduleFlag == mtRelay && relayArray[i].relayCallback != NULL)
+                                   ? sr_virtual_str
+                                   : sr_relay_str;
     }
   }
 
