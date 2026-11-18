@@ -312,6 +312,11 @@
       .relay-badge.off {
         color: #b91c1c;
       }
+      /* виртуальное реле: метка "{..}" */
+      .relay-badge.virtual {
+        color: var(--accent);
+        font-size: 13px;
+      }
 
       .edit-btn {
         padding: 4px 10px;
@@ -371,6 +376,9 @@
         gap: 12px;
         margin-bottom: 12px;
       }
+      .field[hidden] {
+        display: none;
+      }
       .field label {
         color: var(--muted);
         font-size: 13px;
@@ -421,6 +429,38 @@
       .field.relay-off select {
         color: #b91c1c;
         border-color: #fca5a5;
+      }
+
+      /* строка-заглушка вместо "Действие с реле" для виртуального реле */
+      .field.relay-virtual {
+        justify-content: center;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: var(--selected);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .field.relay-virtual.hidden {
+        display: none;
+      }
+
+      /* выделение виртуальных реле: акцентный цвет + курсив.
+         option стилизует строки выпадающего списка, #fIndex.option-virtual -
+         само поле select, когда выбрано виртуальное реле */
+      #fIndex option.virtual {
+        color: var(--accent);
+        font-style: italic;
+      }
+      /* стиль select наследуется пунктам списка, поэтому локальным реле
+         возвращаем обычный вид явным правилом - иначе при выбранном
+         виртуальном реле подсветка уходит на весь список */
+      #fIndex option:not(.virtual) {
+        color: var(--text);
+        font-style: normal;
+      }
+      #fIndex.option-virtual {
+        color: var(--accent);
+        font-style: italic;
       }
 
       .days {
@@ -583,6 +623,10 @@
           </select>
         </div>
 
+        <div class="field relay-virtual hidden" id="fRelayVirtual">
+          <span>Виртуальное реле</span>
+        </div>
+
         <div class="field">
           <label for="fPeriod">Повтор</label>
           <select id="fPeriod">
@@ -698,6 +742,7 @@
       const fTime = document.getElementById("fTime");
       const fIndex = document.getElementById("fIndex");
       const fRelayStatus = document.getElementById("fRelayStatus");
+      const fRelayVirtual = document.getElementById("fRelayVirtual");
       const fPeriod = document.getElementById("fPeriod");
       const fDays = document.getElementById("fDays");
 
@@ -919,11 +964,24 @@
         return h + ":" + m;
       }
 
+      // суффикс, которым прошивка помечает виртуальные реле в r_list
+      const VIRTUAL_SUFFIX = ": {..}";
+
+      function isVirtualRelay(index) {
+        const n = Number(index);
+        return relayNames[n] !== undefined &&
+          relayNames[n].endsWith(VIRTUAL_SUFFIX);
+      }
+
       function relayName(index) {
         const n = Number(index);
-        return relayNames[n] !== undefined && relayNames[n] !== ""
-          ? relayNames[n]
-          : "реле " + n;
+        const raw = relayNames[n];
+        if (raw !== undefined && raw !== "") {
+          return raw.endsWith(VIRTUAL_SUFFIX)
+            ? raw.slice(0, -VIRTUAL_SUFFIX.length)
+            : raw;
+        }
+        return "реле " + n;
       }
 
       // смещение локального пояса в секундах, восток - положительное (МСК = 10800)
@@ -1021,12 +1079,15 @@
 
       // человекочитаемое описание задачи для сообщений
       function taskText(task) {
+        const action = isVirtualRelay(task.rel)
+          ? "виртуальное реле"
+          : (task.act ? "включить" : "выключить");
         return (
           timeToText(task.time) +
           " · " +
           relayName(task.rel) +
           ": " +
-          (task.act ? "включить" : "выключить") +
+          action +
           " · " +
           periodToText(task.rep)
         );
@@ -1035,14 +1096,16 @@
       // поиск задачи-дубля: совпадают время, реле, действие с реле и повтор;
       // статус (state) в сравнении не участвует - дублем считается и
       // выключенная задача. exceptId исключает из сравнения саму
-      // редактируемую задачу (при добавлении новой передаём null)
+      // редактируемую задачу (при добавлении новой передаём null).
+      // Для виртуальных реле поле act не учитывается.
       function findDuplicate(draft, exceptId) {
+        const skipAct = isVirtualRelay(draft.rel);
         return tasks.find(
           (t) =>
             t.id !== exceptId &&
             t.time === draft.time &&
             Number(t.rel) === Number(draft.rel) &&
-            t.act === draft.act &&
+            (skipAct || t.act === draft.act) &&
             t.rep === draft.rep,
         );
       }
@@ -1078,12 +1141,23 @@
           tdRelay.className = "col-relay";
           // в столбце показываем имя реле из r_list; сам индекс (task.rel)
           // остаётся в данных и уходит на модуль при сохранении
-          tdRelay.textContent = relayName(task.rel) + ": ";
-          const badge = document.createElement("span");
-          badge.className = "relay-badge " + (task.act ? "on" : "off");
-          badge.textContent = task.act ? "✓" : "✗";
-          badge.title = task.act ? "включить" : "выключить";
-          tdRelay.append(badge);
+          tdRelay.textContent = relayName(task.rel);
+          if (isVirtualRelay(task.rel)) {
+            // виртуальное реле — метка "{..}"
+            tdRelay.append(document.createTextNode(": "));
+            const badge = document.createElement("span");
+            badge.className = "relay-badge virtual";
+            badge.textContent = "{..}";
+            badge.title = "виртуальное реле";
+            tdRelay.append(badge);
+          } else {
+            tdRelay.append(document.createTextNode(": "));
+            const badge = document.createElement("span");
+            badge.className = "relay-badge " + (task.act ? "on" : "off");
+            badge.textContent = task.act ? "✓" : "✗";
+            badge.title = task.act ? "включить" : "выключить";
+            tdRelay.append(badge);
+          }
 
           const tdPeriod = document.createElement("td");
           tdPeriod.className = "col-period";
@@ -1239,7 +1313,8 @@
         relayNames.forEach((name, i) => {
           const opt = document.createElement("option");
           opt.value = i;
-          opt.textContent = name !== "" ? name : "реле " + i;
+          opt.textContent = relayName(i);
+          if (isVirtualRelay(i)) opt.className = "virtual";
           fIndex.append(opt);
         });
         // если реле задачи нет в списке (добавились новые) — создаём опцию
@@ -1256,6 +1331,7 @@
         fIndex.value = curRel; // для новой задачи это "0"
         fRelayStatus.value = task ? (task.act ? "1" : "0") : "1";
         syncRelayRow();
+        syncRelayStatusVisibility();
 
         const p = task ? task.rep : TR_DAILY;
         const byDays = p !== TR_ONCE && !(p & TR_DAILY);
@@ -1281,6 +1357,16 @@
         fRelayField.classList.toggle("relay-off", !on);
       }
       fRelayStatus.addEventListener("change", syncRelayRow);
+
+      // скрыть поле "Действие с реле" и показать строку "Виртуальное реле"
+      function syncRelayStatusVisibility() {
+        const virtual = isVirtualRelay(fIndex.value);
+        fRelayField.hidden = virtual;
+        fRelayVirtual.classList.toggle("hidden", !virtual);
+        // выбранные виртуальные реле подсвечиваем и в самом select
+        fIndex.classList.toggle("option-virtual", virtual);
+      }
+      fIndex.addEventListener("change", syncRelayStatusVisibility);
 
       document
         .getElementById("btnCancel")
@@ -1321,7 +1407,9 @@
           state: fStatus.checked,
           time: Math.min(1439, Math.max(0, h * 60 + m)),
           rel: String(fIndex.value), // select отдаёт индекс реле из r_list
-          act: fRelayStatus.value === "1",
+          // для виртуальных реле act игнорируется прошивкой, но фиксируем
+          // значение, чтобы в файл не попадало случайное от предыдущего реле
+          act: isVirtualRelay(fIndex.value) ? true : fRelayStatus.value === "1",
           rep: rep,
         };
 

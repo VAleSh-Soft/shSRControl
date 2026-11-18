@@ -120,7 +120,7 @@ void setup()
                        (shTaskRepeat)(TR_MON_DAY | TR_WED_DAY | TR_FRI_DAY));
   switch_control.addTaskToList(task);
 
-  // запускаем HTTP-сервер
+  // запускаем HTTP-сервер для работы Web-интерфейса
   HTTP.onNotFound([]()
                   { HTTP.send(404, "text/plan", F("404. File not found.")); });
   HTTP.begin();

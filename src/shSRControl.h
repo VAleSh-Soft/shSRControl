@@ -16,15 +16,22 @@
 #include <Ticker.h>
 #include "srButtons.h"
 
+// ==== типы данных ==================================
+
 #if defined(ARDUINO_ARCH_ESP32)
 typedef WebServer shWebServer;
 #else
 typedef ESP8266WebServer shWebServer;
 #endif
+typedef void (*srRelayCallback)(void); // тип - указатель для Callback-функции
+
+// ==== настройки ====================================
 
 #define SR_DEFAULT_UDP_PORT 54321         // номер порта по умолчанию для обмена udp-пакетами
 #define SR_DEFAULT_CHECK_INTERVAL 60000ul // интервал опроса удаленных реле модулем выключателя, миллисекунд
 #define SR_SIZE_LIST_OF_REMOTE_RELAYS 10  // максимальный размер списка доступных в сети удаленных реле
+
+// ==== данные планировщика задач ====================
 
 // описание флагов периодичности выполнения задачи
 enum shTaskRepeat : uint8_t
@@ -66,6 +73,8 @@ struct shSchedulerData
                                               task_repeat(task_repeat) {}
 };
 
+// ==== данные реле/выключателей =====================
+
 // описание типов модулей
 enum srModuleType : uint8_t
 {
@@ -78,19 +87,21 @@ enum srModuleType : uint8_t
 // описание свойств реле
 struct shRelayData
 {
-  String relayName;          // имя реле
-  int8_t relayPin;           // пин, к которому подключено реле
-  uint8_t relayControlLevel; // управляющий уровень реле (LOW или HIGH)
-  bool relayLastState;       // последнее состояние реле
-  String relayDescription;   // описание реле
-  srButton *relayButton;     // указатель на локальную кнопку, привязанную к реле
+  String relayName;               // имя реле
+  int8_t relayPin;                // пин, к которому подключено реле
+  uint8_t relayControlLevel;      // управляющий уровень реле (LOW или HIGH)
+  bool relayLastState;            // последнее состояние реле
+  String relayDescription;        // описание реле
+  srButton *relayButton;          // указатель на локальную кнопку, привязанную к реле
+  srRelayCallback relayCallback; // указатель на Callback-функцию, которая будет вызываться вместо переключения реле
 
   shRelayData() : relayName(""),
                   relayPin(-1),
                   relayControlLevel(HIGH),
                   relayDescription(""),
                   relayLastState(false),
-                  relayButton(NULL) {}
+                  relayButton(NULL),
+                  relayCallback(nullptr) {}
 
   shRelayData(String relay_name,
               uint8_t relay_pin,
@@ -102,7 +113,23 @@ struct shRelayData
                                                relayDescription(relay_description),
                                                relayLastState(false),
                                                relayButton((relay_button_pin < 0) ? NULL
-                                                                                  : new (std::nothrow) srButton(relay_button_pin)) {}
+                                                                                  : new (std::nothrow) srButton(relay_button_pin)),
+                                               relayCallback(nullptr) {}
+
+  shRelayData(String relay_name,
+              srRelayCallback relay_callback,
+              int8_t relay_button_pin = -1,
+              String relay_descripton = "") : relayName(relay_name),
+                                              relayPin(-1),
+
+                                              relayControlLevel(LOW),
+                                              relayDescription(relay_descripton),
+                                              relayLastState(false),
+                                              relayButton((relay_button_pin < 0) ? NULL
+                                                                                 : new (std::nothrow) srButton(relay_button_pin)),
+                                              relayCallback(relay_callback)
+  {
+  }
 };
 
 // описание свойств выключателя
@@ -147,6 +174,7 @@ private:
   void respondToRelayCheck(int8_t index);
   void receiveUdpPacket(int _size);
   int8_t getRelayIndexByName(String _name);
+  void setState(int8_t relay_index, String comm);
 
 public:
   /**
@@ -168,13 +196,29 @@ public:
    * @param relay_name имя локального реле
    * @param relay_pin пин, к которому подключено реле
    * @param control_level логический уровень, которым управляется реле (HIGH или LOW)
-   * @param relay_button локальная кнопка для управления реле или nullptr, если локальной кнопки нет
+   * @param relay_button_pin пин для подключения локальной кнопки для управления реле или -1, если локальной кнопки нет
    * @param relay_description описание реле
+   * 
    * @return true если реле добавлено успешно, иначе false
    */
   bool addRelay(const String &relay_name,
                 int8_t relay_pin,
                 uint8_t control_level,
+                int8_t relay_button_pin = -1,
+                const String &relay_description = "");
+
+  /**
+   * @brief добавление данных виртуального реле
+   *
+   * @param relay_name имя виртуального реле
+   * @param relay_callback callback-функция, которая будет вызываться вместо переключения состояния реле
+   * @param relay_button_pin пин для подключения локальной кнопки для управления реле или -1, если локальной кнопки нет
+   * @param relay_description описание реле
+   * 
+   * @return true если реле добавлено успешно, иначе false
+   */
+  bool addRelay(const String &relay_name,
+                srRelayCallback relay_callback,
                 int8_t relay_button_pin = -1,
                 const String &relay_description = "");
 
@@ -306,6 +350,7 @@ public:
    * @brief получение информации о текущем состоянии реле (включено/отключено)
    *
    * @param index  индекс реле в массиве
+   * 
    * @return String "on" - включено; "off" - отключено
    */
   String getRelayState(int8_t index);
@@ -314,6 +359,7 @@ public:
    * @brief получение информации о текущем состоянии реле (включено/отключено)
    *
    * @param _name сетевое имя реле
+   * 
    * @return String  "on" - включено; "off" - отключено
    */
   String getRelayState(String _name);
@@ -373,6 +419,7 @@ public:
    * @brief получение текущего сетевого имени реле
    *
    * @param index индекс реле в массиве
+   * 
    * @return String
    */
   String getRelayName(int8_t index);
@@ -389,6 +436,7 @@ public:
    * @brief получение текущего описания реле
    *
    * @param index индекс реле в массиве
+   * 
    * @return String
    */
   String getRelayDescription(int8_t index);
@@ -477,8 +525,7 @@ public:
   /**
    * @brief получить статус работы с NTP-серверами
    *
-   * @return true - включено
-   * @return false - выключено
+   * @return true - включено, false - выключено
    */
   bool getNtpStatus();
 
@@ -517,6 +564,7 @@ public:
    * @brief поиск задачи с заданными параметрами
    *
    * @param _task структура, описывающая искомую задачу
+   * 
    * @return uint8_t
    */
   uint8_t findTask(shSchedulerData &_task);
@@ -541,6 +589,7 @@ public:
    * @brief удаление задачи из списка планировщика
    *
    * @param _idx индекс задачи в списке планировщика
+   * 
    * @return true
    * @return false
    */
@@ -550,6 +599,7 @@ public:
    * @brief получить количество задач в планировщике
    *
    * @param is_active считать только активные задачи
+   * 
    * @return uint8_t
    */
   uint8_t getTaskCount(bool is_active = false);
@@ -567,6 +617,7 @@ public:
    *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
+   * 
    * @return true
    * @return false
    */
@@ -576,6 +627,7 @@ public:
    * @brief получение текущего состояния кнопки
    *
    * @param _idx индекс в массиве реле, к которому привязана кнопка
+   * 
    * @return uint8_t
    */
   uint8_t getButtonState(uint8_t _idx);
@@ -593,6 +645,7 @@ public:
    *
    * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
    * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
+   * 
    * @return true
    * @return false
    */
@@ -656,7 +709,8 @@ public:
    * @brief добавление данных удаленного реле
    *
    * @param relay_name имя удаленного реле
-   * @param relay_button кнопка, управляющая удаленным реле или nullptr, если управляющей кнопки нет
+   * @param relay_button_pin пин для подключения локальной кнопки для управления реле или -1, если локальной кнопки нет
+   *
    * @return true если данные добавлены успешно, иначе false
    */
   bool addRelay(const String &relay_name,
@@ -855,6 +909,7 @@ public:
    * @brief получение текущего имени удаленного реле, связанного с кнопкой
    *
    * @param index индекс реле в массиве
+   * 
    * @return String
    */
   String getRelayName(int8_t index);
@@ -1006,6 +1061,7 @@ public:
    * @brief удаление задачи из списка планировщика
    *
    * @param _idx индекс задачи в списке планировщика
+   * 
    * @return true
    * @return false
    */
@@ -1015,6 +1071,7 @@ public:
    * @brief получить количество задач в планировщике
    *
    * @param is_active считать только активные задачи
+   * 
    * @return uint8_t
    */
   uint8_t getTaskCount(bool is_active = false);
@@ -1032,6 +1089,7 @@ public:
    *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
+   * 
    * @return true
    * @return false
    */
@@ -1041,6 +1099,7 @@ public:
    * @brief получение текущего состояния кнопки
    *
    * @param _idx индекс в массиве реле, к которому привязана кнопка
+   * 
    * @return uint8_t
    */
   uint8_t getButtonState(uint8_t _idx);
@@ -1058,6 +1117,7 @@ public:
    *
    * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
    * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
+   * 
    * @return true
    * @return false
    */

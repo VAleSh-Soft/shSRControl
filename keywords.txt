@@ -12,6 +12,7 @@ shRelayControl	KEYWORD1
 shSwitchControl	KEYWORD1
 shTaskRepeat	KEYWORD1
 shSchedulerData	KEYWORD1
+srRelayCallback	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2) 

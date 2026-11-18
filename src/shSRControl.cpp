@@ -37,7 +37,8 @@ static const String sr_command_str = "command";
 static const String sr_response_str = "resp";
 static const String sr_for_str = "for";
 static const String sr_descr_str = "descr";
-static const String sr_type_str = "type";
+static const String sr_module_type_str = "m_type";
+static const String sr_relay_type_str = "r_type";
 static const String sr_relays_str = "relays";
 static const String sr_module_description_str = "module_descr";
 static const String sr_module_name_str = "module_name";
@@ -71,7 +72,9 @@ static const String sr_ok_str = "ok";
 static const String sr_no_str = "no";
 static const String sr_on_str = "on";
 static const String sr_off_str = "off";
+static const String sr_run_str = "run callback";
 static const String sr_relay_str = "relay";
+static const String sr_virtual_str = "virtual";
 static const String sr_switch_str = "switch";
 static const String sr_set_on_str = "set_on";
 static const String sr_set_off_str = "set_off";
@@ -85,9 +88,9 @@ static const String sr_switch_module_str = "s_module";
 {"name":"any_relay","command":"respond"}
 {"name":"relay1","command":"switch"}
 
-строка ответа реле - имя реле, описание, на что отвечает и ответ: состояние реле после выполнения команды или "ok" в случае ответа на поиск;
-{"name":"relay1","descr":"Розетка у окна","for":"switch","resp":"off"}
-{"name":"relay1","descr":"Розетка у окна","for":"respond","resp":"ok"}
+строка ответа реле - имя реле, тип модуля, описание, на что отвечает и ответ: состояние реле после выполнения команды или "ok" в случае ответа на поиск;
+{"name":"relay1","m_type":"r_module","descr":"Розетка у окна","for":"switch","resp":"off"}
+{"name":"relay1","m_type":"r_module","descr":"Розетка у окна","for":"respond","resp":"ok"}
 */
 
 static const char TEXT_PLAIN[] PROGMEM = "text/plain";
@@ -181,6 +184,9 @@ static String get_json_string_to_send(const String &_name,
 static void switch_local_relay(int8_t index);
 static void set_local_relay_state(int8_t index, bool state);
 static String get_relay_state(int8_t index);
+#ifndef SWITCH_RELAY_LOG_OFF
+static void print_local_relay_state(int8_t index, String state);
+#endif
 
 static void switch_remote_relay(int8_t index);
 static void set_remote_relay_state(int8_t index, bool state);
@@ -248,6 +254,7 @@ static void handleWriteNtpData();
 static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
+                                const String &r_type = sr_relay_str,
                                 const int8_t _last = -1);
 static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
@@ -276,12 +283,44 @@ static bool load_config_file(srModuleType _mdl);
 // оператор сравнения двух задач (если понадобится определять дубликаты)
 bool operator==(const shSchedulerData &a, const shSchedulerData &b)
 {
-  // состояние статуса не учитываем, задача может быть активна или отключена
-  // тем не менее она остается той же самой задачей
-  return (a.time_for_task == b.time_for_task &&
-          a.relay_index == b.relay_index &&
-          a.action_for_relay == b.action_for_relay &&
-          a.task_repeat == b.task_repeat);
+  // состояние статуса задачи не учитываем, задача может быть активна или
+  // отключена тем не менее она остается той же самой задачей
+
+  bool result = moduleFlag == mtSwitch;
+
+  if (result)
+  {
+    // для WiFi-выключателя проверяем как обычно
+    result = (switchArray != NULL &&
+              a.relay_index < relayCount &&
+              b.relay_index < relayCount &&
+              a.time_for_task == b.time_for_task &&
+              a.relay_index == b.relay_index &&
+              a.action_for_relay == b.action_for_relay &&
+              a.task_repeat == b.task_repeat);
+  }
+  else
+  {
+    // для WiFi-реле проверяем с учетом возможности наличия задачи для виртуальных реле
+    result = (relayArray != NULL &&
+              a.relay_index < relayCount &&
+              b.relay_index < relayCount &&
+              a.time_for_task == b.time_for_task &&
+              a.relay_index == b.relay_index &&
+              a.task_repeat == b.task_repeat);
+    if (result)
+    {
+      // результат будет true, если обе задачи для виртуальных реле
+      result = (relayArray[a.relay_index].relayCallback != NULL &&
+                relayArray[a.relay_index].relayCallback != NULL) ||
+               // или обе задачи для локальных реле, и у них одинаковое действие
+               (relayArray[a.relay_index].relayCallback == NULL &&
+                relayArray[b.relay_index].relayCallback == NULL &&
+                a.action_for_relay == b.action_for_relay);
+    }
+  }
+
+  return result;
 }
 
 // ==== shRelayControl class ===========================
@@ -323,7 +362,11 @@ bool shRelayControl::addRelay(const String &relay_name,
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      if (relayArray[i].relayName == "" && relayArray[i].relayPin < 0)
+      // элемент массива реле считается свободным, если не задано имя реле,
+      // пин реле (т.е. relayPin < 0) и не задана callback-фукция
+      if (relayArray[i].relayName == "" &&
+          relayArray[i].relayPin < 0 &&
+          relayArray[i].relayCallback == NULL)
       {
         relayArray[i] = shRelayData(relay_name,
                                     relay_pin,
@@ -333,6 +376,35 @@ bool shRelayControl::addRelay(const String &relay_name,
 
         pinMode(relay_pin, OUTPUT);
         digitalWrite(relay_pin, !control_level);
+        result = true;
+        break;
+      }
+    }
+  }
+  return (result);
+}
+
+bool shRelayControl::addRelay(const String &relay_name,
+                              srRelayCallback relay_callback,
+                              int8_t relay_button_pin,
+                              const String &relay_description)
+{
+  bool result = false;
+  if (relayCount > 0 && relayArray != NULL)
+  {
+    for (uint8_t i = 0; i < relayCount; i++)
+    {
+      // элемент массива реле считается свободным, если не задано имя реле,
+      // пин реле (т.е. relayPin < 0) и не задана callback-фукция
+      if (relayArray[i].relayName == "" &&
+          relayArray[i].relayPin < 0 &&
+          relayArray[i].relayCallback == NULL)
+      {
+        relayArray[i] = shRelayData(relay_name,
+                                    relay_callback,
+                                    relay_button_pin,
+                                    relay_description);
+
         result = true;
         break;
       }
@@ -445,7 +517,17 @@ void shRelayControl::tick()
           relayArray[i].relayButton->getButtonState() == BTN_DOWN)
       {
         bzr.btnBeep(); // одиночный пик на каждое нажатие любой кнопки
-        switch_local_relay(i);
+        if (relayArray[i].relayCallback != NULL)
+        {
+#ifndef SWITCH_RELAY_LOG_OFF
+          print_local_relay_state(i, sr_run_str);
+#endif
+          relayArray[i].relayCallback();
+        }
+        else
+        {
+          switch_local_relay(i);
+        }
       }
     }
   }
@@ -498,28 +580,6 @@ void shRelayControl::respondToRelayCheck(int8_t index)
   }
 }
 
-static void set_state(int8_t relay_index, String comm)
-{
-  if ((relay_index >= 0) && (relay_index < relayCount))
-  {
-    if (comm == sr_switch_str)
-    {
-      switch_local_relay(relay_index);
-    }
-    else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
-    {
-      set_local_relay_state(relay_index, (comm == sr_set_on_str));
-    }
-
-    String s = get_json_string_to_send(relayArray[relay_index].relayName,
-                                       sr_relay_module_str,
-                                       relayArray[relay_index].relayDescription,
-                                       get_relay_state(relay_index),
-                                       comm);
-    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
-  }
-}
-
 void shRelayControl::receiveUdpPacket(int _size)
 {
   String _resp;
@@ -559,13 +619,13 @@ void shRelayControl::receiveUdpPacket(int _size)
       {
         for (uint8_t i = 0; i < relayCount; i++)
         {
-          set_state(i, arg_comm);
+          setState(i, arg_comm);
         }
       }
       // конкретного реле
       else
       {
-        set_state(getRelayIndexByName(get_argument(_resp, sr_name_str)), arg_comm);
+        setState(getRelayIndexByName(get_argument(_resp, sr_name_str)), arg_comm);
       }
     }
     else
@@ -597,6 +657,40 @@ int8_t shRelayControl::getRelayIndexByName(String _name)
   }
 
   return result;
+}
+
+void shRelayControl::setState(int8_t relay_index, String comm)
+{
+  if ((relay_index >= 0) && (relay_index < relayCount))
+  {
+    String state = "run";
+    if (relayArray[relay_index].relayCallback != NULL)
+    {
+#ifndef SWITCH_RELAY_LOG_OFF
+      print_local_relay_state(relay_index, sr_run_str);
+#endif
+      relayArray[relay_index].relayCallback();
+    }
+    else
+    {
+      if (comm == sr_switch_str)
+      {
+        switch_local_relay(relay_index);
+      }
+      else if ((comm == sr_set_on_str) || (comm == sr_set_off_str))
+      {
+        set_local_relay_state(relay_index, (comm == sr_set_on_str));
+      }
+      state = get_relay_state(relay_index);
+    }
+
+    String s = get_json_string_to_send(relayArray[relay_index].relayName,
+                                       sr_relay_module_str,
+                                       relayArray[relay_index].relayDescription,
+                                       state,
+                                       comm);
+    send_udp_packet(udp->remoteIP(), s.c_str(), s.length());
+  }
 }
 
 void shRelayControl::switchRelay(int8_t index)
@@ -1076,7 +1170,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
   // иначе обработать ответ реле на посланную команду
 
   // далее работаем только с пакетами от модулей реле
-  if (get_argument(_resp, sr_type_str) == sr_relay_module_str)
+  if (get_argument(_resp, sr_module_type_str) == sr_relay_module_str)
   {
     // если имя пустое - ничего не делаем
     if (arg_name.length() == 0)
@@ -1494,7 +1588,7 @@ static String get_json_string_to_send(const String &_name,
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
   doc[sr_name_str] = _name;
-  doc[sr_type_str] = _type;
+  doc[sr_module_type_str] = _type;
   doc[sr_descr_str] = _descr;
   doc[sr_for_str] = _for;
   doc[sr_response_str] = _comm;
@@ -1540,18 +1634,9 @@ static void set_local_relay_state(int8_t index, bool state)
     {
       save_config_file(mtRelay);
     }
-
-    if (relayArray[index].relayName != "")
-    {
-      SR_PRINT(relayArray[index].relayName);
-    }
-    else
-    {
-      SR_PRINT(F("no name relay index "));
-      SR_PRINT(index);
-    }
-    SR_PRINT(F(": state - "));
-    SR_PRINTLN(get_relay_state(index));
+#ifndef SWITCH_RELAY_LOG_OFF
+    print_local_relay_state(index, get_relay_state(index));
+#endif
   }
 }
 
@@ -1561,15 +1646,36 @@ static String get_relay_state(int8_t index)
 
   if ((index >= 0) && (index < relayCount))
   {
-    bool state = digitalRead(relayArray[index].relayPin);
-    if (!relayArray[index].relayControlLevel)
+    bool state = false;
+    if (relayArray[index].relayCallback == NULL)
     {
-      state = !state;
+      state = digitalRead(relayArray[index].relayPin);
+      if (!relayArray[index].relayControlLevel)
+      {
+        state = !state;
+      }
     }
     result = (state) ? sr_on_str : sr_off_str;
   }
   return (result);
 }
+
+#ifndef SWITCH_RELAY_LOG_OFF
+static void print_local_relay_state(int8_t index, String state)
+{
+  if (relayArray[index].relayName != "")
+  {
+    SR_PRINT(relayArray[index].relayName);
+  }
+  else
+  {
+    SR_PRINT(F("no name relay index "));
+    SR_PRINT(index);
+  }
+  SR_PRINT(F(": state - "));
+  SR_PRINTLN(state);
+}
+#endif
 
 static void switch_remote_relay(int8_t index)
 {
@@ -1772,7 +1878,17 @@ static void checkTasksList(srModuleType _mdl)
             switch (_mdl)
             {
             case mtRelay:
-              set_local_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
+              if (relayArray[tasksArray[i].relay_index].relayCallback != NULL)
+              {
+#ifndef SWITCH_RELAY_LOG_OFF
+                print_local_relay_state(tasksArray[i].relay_index, sr_run_str);
+#endif
+                relayArray[tasksArray[i].relay_index].relayCallback();
+              }
+              else
+              {
+                set_local_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
+              }
               break;
             case mtSwitch:
               set_remote_relay_state(tasksArray[i].relay_index, tasksArray[i].action_for_relay);
@@ -2175,6 +2291,7 @@ static void handleGetConfig(String _msg)
 static void get_relay_data_json(JsonObject &rel,
                                 const String &_name,
                                 const String &_descr,
+                                const String &r_type,
                                 const int8_t _last)
 {
   if (_last >= 0)
@@ -2183,6 +2300,7 @@ static void get_relay_data_json(JsonObject &rel,
   }
   rel[sr_name_str] = _name;
   rel[sr_descr_str] = _descr;
+  rel[sr_relay_type_str] = r_type;
 }
 
 static void get_relay_data_json(JsonObject &rel,
@@ -2218,10 +2336,14 @@ static void get_config_json_doc(DynamicJsonDocument &doc, srModuleType _mdl)
 
     for (int8_t i = 0; i < relayCount; i++)
     {
+      String r_type = (relayArray[i].relayCallback != NULL)
+                          ? sr_virtual_str
+                          : sr_relay_str;
       JsonObject rel = relays.createNestedObject();
       get_relay_data_json(rel,
                           relayArray[i].relayName,
                           relayArray[i].relayDescription,
+                          r_type,
                           (byte)relayArray[i].relayLastState);
     }
   }
@@ -2364,8 +2486,14 @@ static void handleReadTasksSetting()
   {
     for (uint8_t i = 0; i < relayCount; i++)
     {
-      relays.add((moduleFlag == mtRelay) ? relayArray[i].relayName
-                                         : switchArray[i].relayName);
+      String name = (moduleFlag == mtRelay) ? relayArray[i].relayName
+                                            : switchArray[i].relayName;
+      if (moduleFlag == mtRelay && relayArray[i].relayCallback != NULL)
+      {
+        name += ": {..}";
+      }
+
+      relays.add(name);
     }
   }
 
@@ -2563,8 +2691,20 @@ static void handleRelaySwitch()
 
     int8_t index = get_argument(json, sr_relay_str).toInt();
 
-    switch_local_relay(index);
-    http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
+    if (relayArray[index].relayCallback != NULL)
+    {
+#ifndef SWITCH_RELAY_LOG_OFF
+      print_local_relay_state(index, sr_run_str);
+#endif
+      relayArray[index].relayCallback();
+
+      http_server->send(200, FPSTR(TEXT_HTML), sr_off_str);
+    }
+    else
+    {
+      switch_local_relay(index);
+      http_server->send(200, FPSTR(TEXT_HTML), get_relay_state(index));
+    }
   }
   else
   {
@@ -2598,10 +2738,16 @@ static void handleGetRelayState()
   for (int8_t i = 0; i < relayCount; i++)
   {
     JsonObject rel = relays.createNestedObject();
-    bool state = get_relay_state(i) == sr_on_str;
+    String r_type = (relayArray[i].relayCallback != NULL)
+                        ? sr_virtual_str
+                        : sr_relay_str;
+    bool state = (relayArray[i].relayCallback != NULL)
+                     ? false
+                     : get_relay_state(i) == sr_on_str;
     get_relay_data_json(rel,
                         relayArray[i].relayName,
                         relayArray[i].relayDescription,
+                        r_type,
                         (byte)state);
   }
   serializeJson(doc, _res);

@@ -129,6 +129,36 @@
         outline-offset: 2px;
       }
 
+      /* ======================== ОВАЛ РЕЛЕ (virtual-режим) ======================== */
+      /* label — овальный фон, как для checkbox; внутри — овальная кнопка */
+      .cmn-toggle--button + label {
+        background-color: var(--border);
+        border-radius: 28px;
+        transition: background 0.2s;
+      }
+
+      .cmn-toggle--button + label:after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: calc(100% - 6px);
+        height: calc(100% - 6px);
+        background: var(--panel);
+        border-radius: 22px;
+        transition: transform 0.1s;
+      }
+
+      /* label меняет цвет на зелёный при нажатии */
+      .cmn-toggle--button + label:active {
+        background-color: #22c55e;
+      }
+
+      /* овальная кнопка уменьшается при нажатии на label */
+      .cmn-toggle--button + label:active:after {
+        transform: scale(0.85);
+      }
+
       /* ======================== КНОПКА РЕЛЕ (switch-режим) ======================== */
       .button {
         display: inline-flex;
@@ -236,6 +266,9 @@
       const CONFIG_DATA = "/get_config";
       var dest;
       function switchRelay(l_id) {
+        // document.getElementById("switch-" + l_id).checked =
+        //   !document.getElementById("switch-" + l_id).checked;
+        
         let f_data = { relay: l_id };
         var xhr = new XMLHttpRequest();
         if (dest == "relay") {
@@ -296,11 +329,14 @@
               d1.className = "switch";
 
               if (dest == "relay") {
+                const isVirtual = doc.relays[i].r_type == "virtual";
                 const inp = document.createElement("input");
-                inp.type = "checkbox";
+                inp.type = isVirtual ? "button" : "checkbox";
                 inp.id = "switch-" + i.toString();
-                inp.className = "cmn-toggle";
-                inp.checked = doc.relays[i].last;
+                inp.className = isVirtual
+                  ? "cmn-toggle cmn-toggle--button"
+                  : "cmn-toggle";
+                if (!isVirtual) inp.checked = doc.relays[i].last;
                 d1.append(inp);
 
                 const lab = document.createElement("label");
@@ -308,7 +344,9 @@
                 lab.htmlFor = "switch-" + i.toString();
                 lab.addEventListener("click", (event) => {
                   event.preventDefault();
-                  switchRelay(event.target.id);
+                  // currentTarget, а не target: label - единственный обработчик
+                  // клика, id у input другой ("switch-N")
+                  switchRelay(event.currentTarget.id);
                 });
                 d1.append(lab);
               } else {
