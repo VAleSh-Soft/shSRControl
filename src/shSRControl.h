@@ -56,21 +56,23 @@ struct shSchedulerData
   bool action_for_relay;    // действие с реле (включить/выключить)
   shTaskRepeat task_repeat; // периодичность выполнения задачи
 
-  shSchedulerData() : task_status(true),
-                      time_for_task(0),
-                      relay_index(0),
-                      action_for_relay(true),
-                      task_repeat(TR_ONCE) {}
+  shSchedulerData()
+      : task_status(true),
+        time_for_task(0),
+        relay_index(0),
+        action_for_relay(true),
+        task_repeat(TR_ONCE) {}
 
   shSchedulerData(bool task_status,
                   int32_t time_for_task,
                   uint8_t relay_index,
                   bool action_for_relay,
-                  shTaskRepeat task_repeat) : task_status(task_status),
-                                              time_for_task(time_for_task),
-                                              relay_index(relay_index),
-                                              action_for_relay(action_for_relay),
-                                              task_repeat(task_repeat) {}
+                  shTaskRepeat task_repeat)
+      : task_status(task_status),
+        time_for_task(time_for_task),
+        relay_index(relay_index),
+        action_for_relay(action_for_relay),
+        task_repeat(task_repeat) {}
 };
 
 // ==== данные реле/выключателей =====================
@@ -95,41 +97,44 @@ struct shRelayData
   srButton *relayButton;         // указатель на локальную кнопку, привязанную к реле
   srRelayCallback relayCallback; // указатель на Callback-функцию, которая будет вызываться вместо переключения реле
 
-  shRelayData() : relayName(""),
-                  relayPin(-1),
-                  relayControlLevel(HIGH),
-                  relayDescription(""),
-                  relayLastState(false),
-                  relayButton(NULL),
-                  relayCallback(nullptr) {}
+  shRelayData()
+      : relayName(""),
+        relayPin(-1),
+        relayControlLevel(HIGH),
+        relayDescription(""),
+        relayLastState(false),
+        relayButton(NULL),
+        relayCallback(nullptr) {}
 
   shRelayData(const String &relay_name,
               uint8_t relay_pin,
               uint8_t control_level,
               int8_t relay_button_pin = -1,
-              const String &relay_description = "") : relayName(relay_name),
-                                                      relayPin(relay_pin),
-                                                      relayControlLevel(control_level),
-                                                      relayDescription(relay_description),
-                                                      relayLastState(false),
-                                                      relayButton((relay_button_pin < 0)
-                                                                      ? NULL
-                                                                      : new (std::nothrow) srButton(relay_button_pin)),
-                                                      relayCallback(nullptr) {}
+              const String &relay_description = "")
+      : relayName(relay_name),
+        relayPin(relay_pin),
+        relayControlLevel(control_level),
+        relayDescription(relay_description),
+        relayLastState(false),
+        relayButton((relay_button_pin < 0)
+                        ? NULL
+                        : new (std::nothrow) srButton(relay_button_pin)),
+        relayCallback(nullptr) {}
 
   shRelayData(const String &relay_name,
               srRelayCallback relay_callback,
               int8_t relay_button_pin = -1,
-              const String &relay_descripton = "") : relayName(relay_name),
-                                                     relayPin(-1),
+              const String &relay_descripton = "")
+      : relayName(relay_name),
+        relayPin(-1),
 
-                                                     relayControlLevel(LOW),
-                                                     relayDescription(relay_descripton),
-                                                     relayLastState(false),
-                                                     relayButton((relay_button_pin < 0)
-                                                                     ? NULL
-                                                                     : new (std::nothrow) srButton(relay_button_pin)),
-                                                     relayCallback(relay_callback)
+        relayControlLevel(LOW),
+        relayDescription(relay_descripton),
+        relayLastState(false),
+        relayButton((relay_button_pin < 0)
+                        ? NULL
+                        : new (std::nothrow) srButton(relay_button_pin)),
+        relayCallback(relay_callback)
   {
   }
 };
@@ -143,20 +148,22 @@ struct shSwitchData
   String relayDescription; // описание удаленного реле
   srButton *relayButton;   // указатель на локальную кнопку, привязанную к реле
 
-  shSwitchData() : relayName(""),
-                   relayDescription(""),
-                   relayFound(false),
-                   relayAddress(IPAddress(0ul)),
-                   relayButton(NULL) {}
+  shSwitchData()
+      : relayName(""),
+        relayDescription(""),
+        relayFound(false),
+        relayAddress(IPAddress(0ul)),
+        relayButton(NULL) {}
 
   shSwitchData(const String &relay_name,
-               int8_t relay_button_pin = -1) : relayName(relay_name),
-                                               relayDescription(""),
-                                               relayFound(false),
-                                               relayAddress(IPAddress(0ul)),
-                                               relayButton((relay_button_pin < 0)
-                                                               ? NULL
-                                                               : new (std::nothrow) srButton(relay_button_pin)) {}
+               int8_t relay_button_pin = -1)
+      : relayName(relay_name),
+        relayDescription(""),
+        relayFound(false),
+        relayAddress(IPAddress(0ul)),
+        relayButton((relay_button_pin < 0)
+                        ? NULL
+                        : new (std::nothrow) srButton(relay_button_pin)) {}
 };
 
 // =====================================================
@@ -570,7 +577,7 @@ public:
    *
    * @return uint8_t
    */
-  uint8_t findTask(const shSchedulerData &_task);
+  uint8_t findTask(shSchedulerData &_task);
 
   /**
    * @brief поиск задачи с заданными параметрами
@@ -1042,7 +1049,7 @@ public:
    * @param _task структура, описывающая искомую задачу
    * @return uint8_t
    */
-  uint8_t findTask(const shSchedulerData &_task);
+  uint8_t findTask(shSchedulerData &_task);
 
   /**
    * @brief поиск задачи с заданными параметрами

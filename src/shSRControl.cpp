@@ -205,8 +205,9 @@ static void clearListOfRemoteRelays();
 // ===================================================
 
 static void checkTasksList(srModuleType _mdl);
-static int8_t find_task(const shSchedulerData &_task);
+static int8_t find_task(shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
+static void normalize_task_repeat(shSchedulerData &_task);
 static bool del_task_in_list(uint8_t _idx);
 static void set_task_status(uint8_t _idx, bool _state);
 static bool set_task_data(uint8_t _idx, shSchedulerData &_task);
@@ -872,7 +873,7 @@ bool shRelayControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
-uint8_t shRelayControl::findTask(const shSchedulerData &_task)
+uint8_t shRelayControl::findTask(shSchedulerData &_task)
 {
   return find_task(_task);
 }
@@ -1388,7 +1389,7 @@ bool shSwitchControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
-uint8_t shSwitchControl::findTask(const shSchedulerData &_task)
+uint8_t shSwitchControl::findTask(shSchedulerData &_task)
 {
   return find_task(_task);
 }
@@ -1924,9 +1925,11 @@ static void checkTasksList(srModuleType _mdl)
   }
 }
 
-static int8_t find_task(const shSchedulerData &_task)
+static int8_t find_task(shSchedulerData &_task)
 {
   int8_t result = -1;
+  normalize_task_repeat(_task);
+
   if (tasksArray != NULL && tasksCount > 0)
   {
     for (uint8_t i = 0; i < tasksCount; i++)
@@ -1950,12 +1953,9 @@ static bool add_task_to_list(shSchedulerData &_task)
     return false;
   }
 
-    // контроль повторяемости задачи - если выбраны все дни недели, то
-    // установить ежедневный повтор
-    if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
-    {
-      _task.task_repeat = TR_DAILY;
-    }
+  // контроль повторяемости задачи - если выбраны все дни недели, то
+  // установить ежедневный повтор
+  normalize_task_repeat(_task);
 
   // проверить наличие такой задачи
   int8_t idx = find_task(_task);
@@ -1983,6 +1983,16 @@ static bool add_task_to_list(shSchedulerData &_task)
   SR_PRINTLN(F("The task has been added successfully"));
 
   return save_config_file(mtTasks, doc);
+}
+
+void normalize_task_repeat(shSchedulerData &_task)
+{
+  // контроль повторяемости задачи - если выбраны все дни недели, то
+  // установить ежедневный повтор
+  if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
+  {
+    _task.task_repeat = TR_DAILY;
+  }
 }
 
 static bool del_task_in_list(uint8_t _idx)
@@ -2029,10 +2039,7 @@ static bool set_task_data(uint8_t _idx, shSchedulerData &_task)
 
     // контроль повторяемости задачи - если выбраны все дни недели, то
     // установить ежедневный повтор
-    if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
-    {
-      _task.task_repeat = TR_DAILY;
-    }
+    normalize_task_repeat(_task);
 
     if (find_task(_task) >= 0)
     {
