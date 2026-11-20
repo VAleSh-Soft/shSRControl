@@ -175,9 +175,9 @@ bool shSwitchControl::addRelay(const String &relay_name,
 
 ```
 void attachWebInterface(shWebServer *_server,
-                          FS *_file_system,
-                          const String &_tasks_config_page = "",
-                          const String &_wifi_config_page = "");
+                        FS *_file_system,
+                        const String &_tasks_config_page = "",
+                        const String &_wifi_config_page = "");
 ```
 здесь:
 - `_server` - ссылка на экземпляр Web-сервера, с которым будет работать модуль;
@@ -318,7 +318,7 @@ void setBtnBeepData(uint16_t _freq, uint32_t _dur);
 
 установка описания модуля
 ```
-void setModuleDescription(String &_descr);
+void setModuleDescription(const String &_descr);
 ```
 здесь:
 - `_descr` - описание модуля;
@@ -356,7 +356,7 @@ String getModuleName();
 
 установка описания реле; метод доступен только для модуля WiFi-реле
 ```
-void shRelayControl::setRelayDescription(int8_t index, String &_descr)
+void shRelayControl::setRelayDescription(int8_t index, const String &_descr)
 ```
 здесь:
 - `index` - индекс в массиве реле;
@@ -375,7 +375,7 @@ String shRelayControl::getRelayDescription(int8_t index)
 
 установка имени реле; для модуля WiFi-реле это имя, по которому реле будет доступно по сети, для модуля WiFi-выключателя это имя, по которому он будет управлять удаленным реле
 ```
-void setRelayName(int8_t index, String _name);
+void setRelayName(int8_t index, const String &_name);
 ```
 здесь:
 - `index` - индекс в массиве реле;
@@ -497,7 +497,7 @@ void shSwitchControl::findRelays()
 переключение состояния реле; можно использовать как имя реле, так и индекс этого реле в массиве
 ```
 void switchRelay(int8_t index);
-void switchRelay(String _name);
+void switchRelay(const String &_name);
 ```
 здесь:
 - `index` - индекс реле в массиве;
@@ -508,7 +508,7 @@ void switchRelay(String _name);
 установка состояния реле; здесь так же можно использовать как имя реле, так и индекс этого реле в массиве
 ```
 void setRelayState(uint8_t index, bool state);
-void setRelayState(String _name, bool state);
+void setRelayState(const String &_name, bool state);
 ```
 здесь:
 - `index` - индекс реле в массиве;
@@ -520,7 +520,7 @@ void setRelayState(String _name, bool state);
 получение текущего состояния реле; доступно только для модуля WiFi-реле
 ```
 String shRelayControl::getRelayState(int8_t index);
-String shRelayControl::getRelayState(String _name);
+String shRelayControl::getRelayState(const String &_name);
 ```
 здесь:
 - `index` - индекс реле в массиве;
@@ -589,9 +589,9 @@ time_t getTimeZoneOffset();
 ```
   void setNtpData(bool _enabled,
                   time_t _tz = 180,
-                  String _ntp_srv1 = "",
-                  String _ntp_srv2 = "",
-                  String _ntp_srv3 = "");
+                  const String &_ntp_srv1 = "",
+                  const String &_ntp_srv2 = "",
+                  const String &_ntp_srv3 = "");
 ```
 здесь:
 - `_enabled` - включение/отключение синхронизации времени с NTP-серверами;
@@ -675,11 +675,13 @@ bool addTaskToList(shSchedulerData &_task);
 
 ***Примечание:** при добавлении задачи проверяется наличие дубликата в списке; в случае, если задача с такими параметрами существует, то новая задача добавляться не будет, вместо этого найденной задаче будет присвоено значение `.task_status` добавляемой задачи; метод при этом вернет **true***
 
+***Примечание:** при добавлении задачи для виртуального реле поле `.action_for_relay` для реле может иметь любое значение - для виртуального реле оно все равно учитываться не будет*
+
 <hr>
 
 поиск задачи в списке планировщика по заданным параметрам; возвращает индекс задачи в списке планировщика или -1, если задача не найдена
 ```
-uint8_t findTask(shSchedulerData &_task);
+uint8_t findTask(const shSchedulerData &_task);
 ```
 здесь:
 - `_task` - структура, описывающая искомую задачу;

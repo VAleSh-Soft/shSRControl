@@ -170,10 +170,10 @@ static String tasks_config_page = "";
 // ===================================================
 
 static IPAddress get_broadcast_address();
-static bool get_value_of_argument(String &_res, const String &_arg, String &_str);
+static bool get_value_of_argument(const String &_res, const String &_arg, String &_str);
 static bool send_udp_packet(const IPAddress &address, const char *buf, size_t bufSize);
 static bool get_udp_string(String &_str, int _size);
-static String get_argument(String &_res, const String &_arg);
+static String get_argument(const String &_res, const String &_arg);
 static String get_json_string_to_send(const String &_name, const String &_comm);
 static String get_json_string_to_send(const String &_name,
                                       const String &_type,
@@ -185,7 +185,7 @@ static void switch_local_relay(int8_t index);
 static void set_local_relay_state(int8_t index, bool state);
 static String get_relay_state(int8_t index);
 #ifndef SWITCH_RELAY_LOG_OFF
-static void print_local_relay_state(int8_t index, String state);
+static void print_local_relay_state(int8_t index, const String &state);
 #endif
 
 static void switch_remote_relay(int8_t index);
@@ -205,7 +205,7 @@ static void clearListOfRemoteRelays();
 // ===================================================
 
 static void checkTasksList(srModuleType _mdl);
-static int8_t find_task(shSchedulerData &_task);
+static int8_t find_task(const shSchedulerData &_task);
 static bool add_task_to_list(shSchedulerData &_task);
 static bool del_task_in_list(uint8_t _idx);
 static void set_task_status(uint8_t _idx, bool _state);
@@ -216,9 +216,9 @@ static time_t get_local_time();
 static void set_time_zone_offset(time_t _tz);
 static void set_ntp_data(bool _ntp_enabled,
                          time_t _tz = 180,
-                         String _ntp_server1 = "",
-                         String _ntp_server2 = "",
-                         String _ntp_server3 = "");
+                         const String &_ntp_server1 = "",
+                         const String &_ntp_server2 = "",
+                         const String &_ntp_server3 = "");
 
 // ===================================================
 static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl);
@@ -237,7 +237,7 @@ static void handleGetConfigPage();
 
 static void handleGetIndexPage();
 
-static void handleGetConfig(String _msg);
+static void handleGetConfig(const String &_msg);
 static void handleGetRelayConfig();
 static void handleGetSwitchConfig();
 static void handleGetListOfRemoteRelays();
@@ -641,7 +641,7 @@ void shRelayControl::receiveUdpPacket(int _size)
   }
 }
 
-int8_t shRelayControl::getRelayIndexByName(String _name)
+int8_t shRelayControl::getRelayIndexByName(const String &_name)
 {
   int8_t result = -1;
   if (_name.length() > 0)
@@ -659,7 +659,7 @@ int8_t shRelayControl::getRelayIndexByName(String _name)
   return result;
 }
 
-void shRelayControl::setState(int8_t relay_index, String comm)
+void shRelayControl::setState(int8_t relay_index, const String &comm)
 {
   if ((relay_index >= 0) && (relay_index < relayCount))
   {
@@ -698,7 +698,7 @@ void shRelayControl::switchRelay(int8_t index)
   switch_local_relay(index);
 }
 
-void shRelayControl::switchRelay(String _name)
+void shRelayControl::switchRelay(const String &_name)
 {
   switch_local_relay(getRelayIndexByName(_name));
 }
@@ -708,7 +708,7 @@ void shRelayControl::setRelayState(int8_t index, bool state)
   set_local_relay_state(index, state);
 }
 
-void shRelayControl::setRelayState(String _name, bool state)
+void shRelayControl::setRelayState(const String &_name, bool state)
 {
   set_local_relay_state(getRelayIndexByName(_name), state);
 }
@@ -726,12 +726,12 @@ String shRelayControl::getRelayState(int8_t index)
   return (get_relay_state(index));
 }
 
-String shRelayControl::getRelayState(String _name)
+String shRelayControl::getRelayState(const String &_name)
 {
   return (get_relay_state(getRelayIndexByName(_name)));
 }
 
-void shRelayControl::setModuleDescription(String &_descr)
+void shRelayControl::setModuleDescription(const String &_descr)
 {
   module_description = _descr;
 }
@@ -761,7 +761,7 @@ bool shRelayControl::getSaveStateOfRelay()
   return (save_state_of_relay);
 }
 
-void shRelayControl::setRelayName(int8_t index, String &_name)
+void shRelayControl::setRelayName(int8_t index, const String &_name)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -779,7 +779,7 @@ String shRelayControl::getRelayName(int8_t index)
   return (result);
 }
 
-void shRelayControl::setRelayDescription(int8_t index, String &_descr)
+void shRelayControl::setRelayDescription(int8_t index, const String &_descr)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -840,9 +840,9 @@ time_t shRelayControl::getTimeZoneOffset()
 
 void shRelayControl::setNtpData(bool _enabled,
                                 time_t _tz,
-                                String _ntp_srv1,
-                                String _ntp_srv2,
-                                String _ntp_srv3)
+                                const String &_ntp_srv1,
+                                const String &_ntp_srv2,
+                                const String &_ntp_srv3)
 {
   set_ntp_data(_enabled, _tz, _ntp_srv1, _ntp_srv2, _ntp_srv3);
 }
@@ -872,7 +872,7 @@ bool shRelayControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
-uint8_t shRelayControl::findTask(shSchedulerData &_task)
+uint8_t shRelayControl::findTask(const shSchedulerData &_task)
 {
   return find_task(_task);
 }
@@ -1217,7 +1217,7 @@ void shSwitchControl::receiveUdpPacket(int _size)
   }
 }
 
-int8_t shSwitchControl::getRelayIndexByName(String _name)
+int8_t shSwitchControl::getRelayIndexByName(const String &_name)
 {
   int8_t result = -1;
   if (_name.length() > 0)
@@ -1240,7 +1240,7 @@ void shSwitchControl::switchRelay(int8_t index)
   switch_remote_relay(index);
 }
 
-void shSwitchControl::switchRelay(String _name)
+void shSwitchControl::switchRelay(const String &_name)
 {
   switch_remote_relay(getRelayIndexByName(_name));
 }
@@ -1250,7 +1250,7 @@ void shSwitchControl::setRelayState(int8_t index, bool state)
   set_remote_relay_state(index, state);
 }
 
-void shSwitchControl::setRelayState(String _name, bool state)
+void shSwitchControl::setRelayState(const String &_name, bool state)
 {
   set_remote_relay_state(getRelayIndexByName(_name), state);
 }
@@ -1295,7 +1295,7 @@ String shSwitchControl::getModuleName()
   return (module_name);
 }
 
-void shSwitchControl::setRelayName(int8_t index, String _name)
+void shSwitchControl::setRelayName(int8_t index, const String &_name)
 {
   if ((index >= 0) && (index < relayCount))
   {
@@ -1355,9 +1355,9 @@ time_t shSwitchControl::getTimeZoneOffset()
 
 void shSwitchControl::setNtpData(bool _enabled,
                                  time_t _tz,
-                                 String _ntp_srv1,
-                                 String _ntp_srv2,
-                                 String _ntp_srv3)
+                                 const String &_ntp_srv1,
+                                 const String &_ntp_srv2,
+                                 const String &_ntp_srv3)
 
 {
   set_ntp_data(_enabled, _tz, _ntp_srv1, _ntp_srv2, _ntp_srv3);
@@ -1388,7 +1388,7 @@ bool shSwitchControl::addTaskToList(shSchedulerData &_task)
   return add_task_to_list(_task);
 }
 
-uint8_t shSwitchControl::findTask(shSchedulerData &_task)
+uint8_t shSwitchControl::findTask(const shSchedulerData &_task)
 {
   return find_task(_task);
 }
@@ -1492,7 +1492,7 @@ static IPAddress get_broadcast_address()
   return (result);
 }
 
-static bool get_value_of_argument(String &_res, const String &_arg, String &_str)
+static bool get_value_of_argument(const String &_res, const String &_arg, String &_str)
 {
   StaticJsonDocument<RELAY_DATA_SIZE> doc;
 
@@ -1572,7 +1572,7 @@ static bool get_udp_string(String &_str, int _size)
   return (read_bytes > 0);
 }
 
-static String get_argument(String &_res, const String &_arg)
+static String get_argument(const String &_res, const String &_arg)
 {
   String result = "";
   get_value_of_argument(_res, _arg, result);
@@ -1661,7 +1661,7 @@ static String get_relay_state(int8_t index)
 }
 
 #ifndef SWITCH_RELAY_LOG_OFF
-static void print_local_relay_state(int8_t index, String state)
+static void print_local_relay_state(int8_t index, const String &state)
 {
   if (relayArray[index].relayName != "")
   {
@@ -1924,7 +1924,7 @@ static void checkTasksList(srModuleType _mdl)
   }
 }
 
-static int8_t find_task(shSchedulerData &_task)
+static int8_t find_task(const shSchedulerData &_task)
 {
   int8_t result = -1;
   if (tasksArray != NULL && tasksCount > 0)
@@ -1950,12 +1950,12 @@ static bool add_task_to_list(shSchedulerData &_task)
     return false;
   }
 
-  // контроль повторяемости задачи - если выбраны все дни недели, то
-  // установить ежедневный повтор
-  if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
-  {
-    _task.task_repeat = TR_DAILY;
-  }
+    // контроль повторяемости задачи - если выбраны все дни недели, то
+    // установить ежедневный повтор
+    if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
+    {
+      _task.task_repeat = TR_DAILY;
+    }
 
   // проверить наличие такой задачи
   int8_t idx = find_task(_task);
@@ -2026,6 +2026,14 @@ static bool set_task_data(uint8_t _idx, shSchedulerData &_task)
 {
   if (_idx < tasksCount)
   {
+
+    // контроль повторяемости задачи - если выбраны все дни недели, то
+    // установить ежедневный повтор
+    if (_task.task_repeat == 0x7f || _task.task_repeat == 0xff)
+    {
+      _task.task_repeat = TR_DAILY;
+    }
+
     if (find_task(_task) >= 0)
     {
       SR_PRINTLN(F("A task with these parameters already exists; the change has not been implemented"));
@@ -2033,6 +2041,8 @@ static bool set_task_data(uint8_t _idx, shSchedulerData &_task)
     }
 
     tasksArray[_idx] = _task;
+
+    SR_PRINTLN(F("The new task data has been successfully set"));
     return save_config_file(mtTasks);
   }
   return false;
@@ -2090,9 +2100,9 @@ static void set_time_zone_offset(time_t _tz)
 
 static void set_ntp_data(bool _ntp_enabled,
                          time_t _tz,
-                         String _ntp_server1,
-                         String _ntp_server2,
-                         String _ntp_server3)
+                         const String &_ntp_server1,
+                         const String &_ntp_server2,
+                         const String &_ntp_server3)
 {
   ntp_enabled = _ntp_enabled;
   // контроль данных: не меньше -12 часов (-720) и не больше 14 часов (840)
@@ -2283,7 +2293,7 @@ static void handleGetIndexPage()
   http_server->send_P(200, TEXT_HTML, INDEX_PAGE);
 }
 
-static void handleGetConfig(String _msg)
+static void handleGetConfig(const String &_msg)
 {
   http_server->send(200, FPSTR(TEXT_JSON), _msg);
 }
@@ -2485,7 +2495,7 @@ static void handleReadTasksSetting()
   if ((moduleFlag == mtRelay && relayArray != NULL) ||
       (moduleFlag == mtSwitch && switchArray != NULL))
   {
-    // получаем список реле с их типом 
+    // получаем список реле с их типом
     for (uint8_t i = 0; i < relayCount; i++)
     {
       JsonObject rel = relays.createNestedObject();
@@ -2635,7 +2645,7 @@ static void handleWriteNtpData()
   http_server->send(200, FPSTR(TEXT_HTML), F("OK"));
 }
 
-static void getStringValue(String &_var, String _val)
+static void getStringValue(String &_var, const String &_val)
 {
   _var = (_val != "NULL") ? _val : "";
 }

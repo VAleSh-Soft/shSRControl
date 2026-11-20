@@ -87,12 +87,12 @@ enum srModuleType : uint8_t
 // описание свойств реле
 struct shRelayData
 {
-  String relayName;               // имя реле
-  int8_t relayPin;                // пин, к которому подключено реле
-  uint8_t relayControlLevel;      // управляющий уровень реле (LOW или HIGH)
-  bool relayLastState;            // последнее состояние реле
-  String relayDescription;        // описание реле
-  srButton *relayButton;          // указатель на локальную кнопку, привязанную к реле
+  String relayName;              // имя реле
+  int8_t relayPin;               // пин, к которому подключено реле
+  uint8_t relayControlLevel;     // управляющий уровень реле (LOW или HIGH)
+  bool relayLastState;           // последнее состояние реле
+  String relayDescription;       // описание реле
+  srButton *relayButton;         // указатель на локальную кнопку, привязанную к реле
   srRelayCallback relayCallback; // указатель на Callback-функцию, которая будет вызываться вместо переключения реле
 
   shRelayData() : relayName(""),
@@ -103,31 +103,33 @@ struct shRelayData
                   relayButton(NULL),
                   relayCallback(nullptr) {}
 
-  shRelayData(String relay_name,
+  shRelayData(const String &relay_name,
               uint8_t relay_pin,
               uint8_t control_level,
               int8_t relay_button_pin = -1,
-              String relay_description = "") : relayName(relay_name),
-                                               relayPin(relay_pin),
-                                               relayControlLevel(control_level),
-                                               relayDescription(relay_description),
-                                               relayLastState(false),
-                                               relayButton((relay_button_pin < 0) ? NULL
-                                                                                  : new (std::nothrow) srButton(relay_button_pin)),
-                                               relayCallback(nullptr) {}
+              const String &relay_description = "") : relayName(relay_name),
+                                                      relayPin(relay_pin),
+                                                      relayControlLevel(control_level),
+                                                      relayDescription(relay_description),
+                                                      relayLastState(false),
+                                                      relayButton((relay_button_pin < 0)
+                                                                      ? NULL
+                                                                      : new (std::nothrow) srButton(relay_button_pin)),
+                                                      relayCallback(nullptr) {}
 
-  shRelayData(String relay_name,
+  shRelayData(const String &relay_name,
               srRelayCallback relay_callback,
               int8_t relay_button_pin = -1,
-              String relay_descripton = "") : relayName(relay_name),
-                                              relayPin(-1),
+              const String &relay_descripton = "") : relayName(relay_name),
+                                                     relayPin(-1),
 
-                                              relayControlLevel(LOW),
-                                              relayDescription(relay_descripton),
-                                              relayLastState(false),
-                                              relayButton((relay_button_pin < 0) ? NULL
-                                                                                 : new (std::nothrow) srButton(relay_button_pin)),
-                                              relayCallback(relay_callback)
+                                                     relayControlLevel(LOW),
+                                                     relayDescription(relay_descripton),
+                                                     relayLastState(false),
+                                                     relayButton((relay_button_pin < 0)
+                                                                     ? NULL
+                                                                     : new (std::nothrow) srButton(relay_button_pin)),
+                                                     relayCallback(relay_callback)
   {
   }
 };
@@ -147,13 +149,14 @@ struct shSwitchData
                    relayAddress(IPAddress(0ul)),
                    relayButton(NULL) {}
 
-  shSwitchData(String relay_name,
+  shSwitchData(const String &relay_name,
                int8_t relay_button_pin = -1) : relayName(relay_name),
                                                relayDescription(""),
                                                relayFound(false),
                                                relayAddress(IPAddress(0ul)),
-                                               relayButton((relay_button_pin < 0) ? NULL
-                                                                                  : new (std::nothrow) srButton(relay_button_pin)) {}
+                                               relayButton((relay_button_pin < 0)
+                                                               ? NULL
+                                                               : new (std::nothrow) srButton(relay_button_pin)) {}
 };
 
 // =====================================================
@@ -173,8 +176,8 @@ class shRelayControl
 private:
   void respondToRelayCheck(int8_t index);
   void receiveUdpPacket(int _size);
-  int8_t getRelayIndexByName(String _name);
-  void setState(int8_t relay_index, String comm);
+  int8_t getRelayIndexByName(const String &_name);
+  void setState(int8_t relay_index, const String &comm);
 
 public:
   /**
@@ -198,7 +201,7 @@ public:
    * @param control_level логический уровень, которым управляется реле (HIGH или LOW)
    * @param relay_button_pin пин для подключения локальной кнопки для управления реле или -1, если локальной кнопки нет
    * @param relay_description описание реле
-   * 
+   *
    * @return true если реле добавлено успешно, иначе false
    */
   bool addRelay(const String &relay_name,
@@ -214,7 +217,7 @@ public:
    * @param relay_callback callback-функция, которая будет вызываться вместо переключения состояния реле
    * @param relay_button_pin пин для подключения локальной кнопки для управления реле или -1, если локальной кнопки нет
    * @param relay_description описание реле
-   * 
+   *
    * @return true если реле добавлено успешно, иначе false
    */
   bool addRelay(const String &relay_name,
@@ -321,7 +324,7 @@ public:
    *
    * @param _name сетевое имя реле
    */
-  void switchRelay(String _name);
+  void switchRelay(const String &_name);
 
   /**
    * @brief установить состояние реле
@@ -337,7 +340,7 @@ public:
    * @param _name сетевое имя реле
    * @param state новое состояние реле; true - включено, иначе выключено;
    */
-  void setRelayState(String _name, bool state);
+  void setRelayState(const String &_name, bool state);
 
   /**
    * @brief установить состояние всех локальных реле
@@ -350,7 +353,7 @@ public:
    * @brief получение информации о текущем состоянии реле (включено/отключено)
    *
    * @param index  индекс реле в массиве
-   * 
+   *
    * @return String "on" - включено; "off" - отключено
    */
   String getRelayState(int8_t index);
@@ -359,17 +362,17 @@ public:
    * @brief получение информации о текущем состоянии реле (включено/отключено)
    *
    * @param _name сетевое имя реле
-   * 
+   *
    * @return String  "on" - включено; "off" - отключено
    */
-  String getRelayState(String _name);
+  String getRelayState(const String &_name);
 
   /**
    * @brief установка описания модуля
    *
    * @param _descr новое описание
    */
-  void setModuleDescription(String &_descr);
+  void setModuleDescription(const String &_descr);
 
   /**
    * @brief получение текущего описания модуля
@@ -413,13 +416,13 @@ public:
    * @param index индекс реле в массиве
    * @param _name новое сетевое имя
    */
-  void setRelayName(int8_t index, String &_name);
+  void setRelayName(int8_t index, const String &_name);
 
   /**
    * @brief получение текущего сетевого имени реле
    *
    * @param index индекс реле в массиве
-   * 
+   *
    * @return String
    */
   String getRelayName(int8_t index);
@@ -430,13 +433,13 @@ public:
    * @param index индекс реле в массиве
    * @param _descr новое описание
    */
-  void setRelayDescription(int8_t index, String &_descr);
+  void setRelayDescription(int8_t index, const String &_descr);
 
   /**
    * @brief получение текущего описания реле
    *
    * @param index индекс реле в массиве
-   * 
+   *
    * @return String
    */
   String getRelayDescription(int8_t index);
@@ -518,9 +521,9 @@ public:
    */
   void setNtpData(bool _enabled,
                   time_t _tz = 180,
-                  String _ntp_srv1 = "",
-                  String _ntp_srv2 = "",
-                  String _ntp_srv3 = "");
+                  const String &_ntp_srv1 = "",
+                  const String &_ntp_srv2 = "",
+                  const String &_ntp_srv3 = "");
 
   /**
    * @brief получить статус работы с NTP-серверами
@@ -564,10 +567,10 @@ public:
    * @brief поиск задачи с заданными параметрами
    *
    * @param _task структура, описывающая искомую задачу
-   * 
+   *
    * @return uint8_t
    */
-  uint8_t findTask(shSchedulerData &_task);
+  uint8_t findTask(const shSchedulerData &_task);
 
   /**
    * @brief поиск задачи с заданными параметрами
@@ -589,7 +592,7 @@ public:
    * @brief удаление задачи из списка планировщика
    *
    * @param _idx индекс задачи в списке планировщика
-   * 
+   *
    * @return true
    * @return false
    */
@@ -599,7 +602,7 @@ public:
    * @brief получить количество задач в планировщике
    *
    * @param is_active считать только активные задачи
-   * 
+   *
    * @return uint8_t
    */
   uint8_t getTaskCount(bool is_active = false);
@@ -617,7 +620,7 @@ public:
    *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
-   * 
+   *
    * @return true
    * @return false
    */
@@ -627,7 +630,7 @@ public:
    * @brief получение текущего состояния кнопки
    *
    * @param _idx индекс в массиве реле, к которому привязана кнопка
-   * 
+   *
    * @return uint8_t
    */
   uint8_t getButtonState(uint8_t _idx);
@@ -645,7 +648,7 @@ public:
    *
    * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
    * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
-   * 
+   *
    * @return true
    * @return false
    */
@@ -689,7 +692,7 @@ class shSwitchControl
 {
 private:
   void receiveUdpPacket(int _size);
-  int8_t getRelayIndexByName(String _name);
+  int8_t getRelayIndexByName(const String &_name);
 
 public:
   /**
@@ -837,7 +840,7 @@ public:
    *
    * @param _name сетевое имя удаленного реле
    */
-  void switchRelay(String _name);
+  void switchRelay(const String &_name);
 
   /**
    * @brief установить состояние удаленного реле
@@ -853,7 +856,7 @@ public:
    * @param _name сетевое имя удаленного реле
    * @param state новое состояние реле; true - включено, иначе выключено;
    */
-  void setRelayState(String _name, bool state);
+  void setRelayState(const String &_name, bool state);
 
   /**
    * @brief установить состояние всех удаленных реле
@@ -903,13 +906,13 @@ public:
    * @param index индекс реле в массиве
    * @param _name новое имя удаленного реле
    */
-  void setRelayName(int8_t index, String _name);
+  void setRelayName(int8_t index, const String &_name);
 
   /**
    * @brief получение текущего имени удаленного реле, связанного с кнопкой
    *
    * @param index индекс реле в массиве
-   * 
+   *
    * @return String
    */
   String getRelayName(int8_t index);
@@ -990,9 +993,9 @@ public:
    */
   void setNtpData(bool _enabled,
                   time_t _tz = 180,
-                  String _ntp_srv1 = "",
-                  String _ntp_srv2 = "",
-                  String _ntp_srv3 = "");
+                  const String &_ntp_srv1 = "",
+                  const String &_ntp_srv2 = "",
+                  const String &_ntp_srv3 = "");
 
   /**
    * @brief получить статус работы с NTP-серверами
@@ -1039,7 +1042,7 @@ public:
    * @param _task структура, описывающая искомую задачу
    * @return uint8_t
    */
-  uint8_t findTask(shSchedulerData &_task);
+  uint8_t findTask(const shSchedulerData &_task);
 
   /**
    * @brief поиск задачи с заданными параметрами
@@ -1061,7 +1064,7 @@ public:
    * @brief удаление задачи из списка планировщика
    *
    * @param _idx индекс задачи в списке планировщика
-   * 
+   *
    * @return true
    * @return false
    */
@@ -1071,7 +1074,7 @@ public:
    * @brief получить количество задач в планировщике
    *
    * @param is_active считать только активные задачи
-   * 
+   *
    * @return uint8_t
    */
   uint8_t getTaskCount(bool is_active = false);
@@ -1089,7 +1092,7 @@ public:
    *
    * @param _idx индекс задачи в списке планировщика
    * @param _task новые данные задачи
-   * 
+   *
    * @return true
    * @return false
    */
@@ -1099,7 +1102,7 @@ public:
    * @brief получение текущего состояния кнопки
    *
    * @param _idx индекс в массиве реле, к которому привязана кнопка
-   * 
+   *
    * @return uint8_t
    */
   uint8_t getButtonState(uint8_t _idx);
@@ -1117,7 +1120,7 @@ public:
    *
    * @param _but кнопка, состояние которой надо проверить в момент возникновения события btn_state текущей кнопки
    * @param btn_state состояние, которое отслеживается методом; по умолчанию обычный клик
-   * 
+   *
    * @return true
    * @return false
    */
