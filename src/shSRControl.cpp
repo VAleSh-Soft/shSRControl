@@ -32,6 +32,7 @@
 #endif
 
 // ==== имена параметров в запросах/ответах ==========
+
 static const String sr_name_str = "name";
 static const String sr_command_str = "command";
 static const String sr_response_str = "resp";
@@ -68,6 +69,7 @@ static const String sr_act_str = "act";
 static const String sr_rep_str = "rep";
 
 // ==== значения параметров в запросах/ответах =======
+
 static const String sr_ok_str = "ok";
 static const String sr_no_str = "no";
 static const String sr_on_str = "on";
@@ -222,6 +224,7 @@ static void set_ntp_data(bool _ntp_enabled,
                          const String &_ntp_server3 = "");
 
 // ===================================================
+
 static uint8_t get_button_state(uint8_t _idx, srModuleType _mdl);
 static bool is_button_closed(uint8_t _idx, srModuleType _mdl);
 static bool is_second_button_pressed(uint8_t _idx,
@@ -234,6 +237,7 @@ static void set_timeout_of_long_click(uint8_t _idx, uint16_t new_timeout, srModu
 static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModuleType _mdl);
 
 // ===================================================
+
 static void handleGetConfigPage();
 
 static void handleGetIndexPage();
@@ -273,6 +277,7 @@ static void handleGetRelayState();
 static void handleRestartModule();
 
 // ===================================================
+
 static bool load_setting(srModuleType _mdl, DynamicJsonDocument &doc);
 
 static void set_config_file_name(const String &_name, srModuleType _mdl);
@@ -1829,9 +1834,8 @@ static void clearListOfRemoteRelays()
   }
 }
 
-// ===================================================
-
 // ==== обработка списка заданий планировщика ========
+
 static void checkTasksList(srModuleType _mdl)
 {
   if (tasksArray != NULL && tasksCount > 0)
@@ -1928,6 +1932,10 @@ static void checkTasksList(srModuleType _mdl)
 static int8_t find_task(shSchedulerData &_task)
 {
   int8_t result = -1;
+  // при добавлении задачи выполняется нормализация поля периодичности
+  // выполнения задачи - если заданы все дни недели, то устанавливается
+  // режим ежедневного выполнения - TR_DAILY; поэтому перед поиском
+  // нормализуем искомое задание
   normalize_task_repeat(_task);
 
   if (tasksArray != NULL && tasksCount > 0)
@@ -2036,9 +2044,6 @@ static bool set_task_data(uint8_t _idx, shSchedulerData &_task)
 {
   if (_idx < tasksCount)
   {
-
-    // контроль повторяемости задачи - если выбраны все дни недели, то
-    // установить ежедневный повтор
     normalize_task_repeat(_task);
 
     if (find_task(_task) >= 0)
@@ -2140,6 +2145,7 @@ static void set_ntp_data(bool _ntp_enabled,
 }
 
 // ===================================================
+
 static bool is_valid_button(uint8_t _idx, srModuleType _mdl)
 {
   bool result = _idx < relayCount;
@@ -2290,6 +2296,7 @@ static void set_timeout_of_debounce(uint8_t _idx, uint16_t new_timeout, srModule
 }
 
 // ==== реакции сервера ==============================
+
 static void handleGetConfigPage()
 {
   http_server->send_P(200, TEXT_HTML, CONFIG_PAGE);
