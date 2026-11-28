@@ -587,11 +587,11 @@ time_t getTimeZoneOffset();
 
 установка параметров NTP
 ```
-  void setNtpData(bool _enabled,
-                  time_t _tz = 180,
-                  const String &_ntp_srv1 = "",
-                  const String &_ntp_srv2 = "",
-                  const String &_ntp_srv3 = "");
+void setNtpData(bool _enabled,
+                time_t _tz = 180,
+                const String &_ntp_srv1 = "",
+                const String &_ntp_srv2 = "",
+                const String &_ntp_srv3 = "");
 ```
 здесь:
 - `_enabled` - включение/отключение синхронизации времени с NTP-серверами;
@@ -601,6 +601,8 @@ time_t getTimeZoneOffset();
 - `_ntp_srv3` - третий NTP-сервер;
 
 ***Примечание:** список серверов по умолчанию - ru.pool.ntp.org, pool.ntp.org, time.google.com*
+
+***Важно!!!** пустое значение аргументов `ntp_srv1`, `ntp_srv2`, `ntp_srv3` не меняет ранее заданные значения, т.е. `setNtpData(true)`по умолчанию просто включит синхронизацию времени со смещением +3 часа по часовому поясу и серверами ru.pool.ntp.org, pool.ntp.org, time.google.com*
 
 <hr>
 

@@ -482,11 +482,11 @@ void shRelayControl::attachWebInterface(shWebServer *_server,
   wifi_config_page = _wifi_config_page;
   tasks_config_page = _tasks_config_page;
 
-  if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
+  if (wifi_config_page.length() > 0 && wifi_config_page[0] != '/')
   {
     wifi_config_page = "/" + wifi_config_page;
   }
-  if (tasks_config_page.length() > 0 && tasks_config_page.indexOf("/") != 0)
+  if (tasks_config_page.length() > 0 && tasks_config_page[0] != '/')
   {
     tasks_config_page = "/" + tasks_config_page;
   }
@@ -1059,11 +1059,11 @@ void shSwitchControl::attachWebInterface(shWebServer *_server,
   tasks_config_page = _tasks_config_page;
   wifi_config_page = _wifi_config_page;
 
-  if (tasks_config_page.length() > 0 && tasks_config_page.indexOf("/") != 0)
+  if (tasks_config_page.length() > 0 && tasks_config_page[0] != '/')
   {
     tasks_config_page = "/" + tasks_config_page;
   }
-  if (wifi_config_page.length() > 0 && wifi_config_page.indexOf("/") != 0)
+  if (wifi_config_page.length() > 0 && wifi_config_page[0] != '/')
   {
     wifi_config_page = "/" + wifi_config_page;
   }
@@ -1838,12 +1838,12 @@ static void clearListOfRemoteRelays()
 
 static void checkTasksList(srModuleType _mdl)
 {
-  if (tasksArray != NULL && tasksCount > 0)
+  static unsigned long ntp_timeout = 30;
+
+  if (time(nullptr) > SR_MIN_VALID_TIME)
   {
-    tm m_time;
-    // время должно быть синхронизировано (getLocalTime возвращает false
-    // пока год не больше 2016, т.е. часы не установлены)
-    if (getLocalTime(&m_time, 0))
+    ntp_timeout = 30;
+    if (tasksArray != NULL && tasksCount > 0)
     {
       bool is_changed = false;
       // текущая минута локальных суток (0..1439); вычисляется из unix time
@@ -1925,6 +1925,28 @@ static void checkTasksList(srModuleType _mdl)
       {
         save_config_file(mtTasks);
       }
+    }
+  }
+  else
+  {
+    if (WiFi.isConnected())
+    {
+      if (ntp_enabled)
+      {
+        ntp_timeout--;
+        if (ntp_timeout == 0)
+        {
+          ntp_timeout = 30;
+          configTzTime("UTC",
+                       ntp_server1.c_str(),
+                       ntp_server2.c_str(),
+                       ntp_server3.c_str());
+        }
+      }
+    }
+    else
+    {
+      ntp_timeout = 30;
     }
   }
 }
